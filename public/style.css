@@ -229,25 +229,47 @@ button.danger {
   opacity: 0.55;
 }
 
+/* Portrait, then name / champion / role stacked to the portrait's height. */
 .player-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
-/* Name and badges shrink first; the card buttons always stay inside the card. */
-.player-head > div:not(.card-actions):not(.portrait) {
-  flex: 1;
+.player-info {
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
-.player-head > .card-actions {
-  flex-shrink: 0;
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
 }
 
 .player-head .name {
   font-weight: 700;
-  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.champion-name {
+  line-height: 1.2;
+}
+
+/* Host crown and ready padlock next to the name. */
+.state-icon {
+  display: inline-flex;
+  color: var(--gold);
+}
+
+.state-icon .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .dot {
@@ -494,17 +516,47 @@ body.picking main {
   padding: 1px 8px;
 }
 
-.card-actions {
+/* Card buttons on their own bar under the header, the same place on every card. */
+.player .card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.modal-head .card-actions {
   display: flex;
   gap: 6px;
   margin-left: auto;
-  align-self: flex-start;
 }
 
-.player-head .icon-button {
-  padding: 4px 10px;
-  font-size: 1rem;
-  white-space: nowrap;
+/* Square buttons with a line icon, all the same size. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  line-height: 1;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.icon-label {
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 /* Random candidate in a card, sized like the other small icons. */
@@ -676,6 +728,9 @@ body.picking main {
 /* Folded room options on the home page. */
 .options-toggle {
   justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: none;
   border: none;
   padding: 2px 0;
@@ -683,6 +738,25 @@ body.picking main {
   font-weight: 400;
   color: var(--muted);
   text-align: left;
+}
+
+.options-toggle > .icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+}
+
+/* Dice before a randomly drawn role. */
+.role-badge.random-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.role-badge .icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
 }
 
 .options-toggle:hover {
@@ -776,11 +850,6 @@ body.modal-open {
   color: var(--gold-bright);
 }
 
-.modal-head .icon-button {
-  padding: 4px 10px;
-  white-space: nowrap;
-}
-
 .modal .options {
   grid-auto-flow: column;
   grid-auto-columns: minmax(280px, 1fr);
@@ -807,27 +876,31 @@ body.modal-open {
   font-weight: 700;
 }
 
+/* Closed padlock in gold; the open one stays neutral. */
 .lock-button.locked {
+  color: var(--gold);
   border-color: var(--gold);
   background: #2a2414;
-}
-
-/* Open padlock greyed out, so it reads clearly apart from the gold locked one. */
-.lock-button:not(.locked) {
-  filter: grayscale(1) opacity(0.6);
-}
-
-.lock-button:not(.locked):hover {
-  filter: none;
 }
 
 .role-badge {
   white-space: nowrap;
 }
 
-/* Header padlock: same height as the text buttons next to it. */
+/* Header padlock: as tall as the text buttons next to it. */
 .lock-all {
-  padding: 10px 9px;
-  font-size: 1rem;
-  line-height: 1;
+  height: auto;
+  align-self: stretch;
+  min-width: 40px;
+}
+
+.ready-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ready-label .icon {
+  width: 15px;
+  height: 15px;
 }

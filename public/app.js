@@ -1,5 +1,7 @@
 import { MODES, ROLES, findRune, loadGameData, patchName, randomChampion, rollBuild } from "/bravery.js";
 import { searchKeys, searchRank } from "/search.js";
+import { cardImage, copyOrDownload } from "/card-image.js";
+import { icon } from "/icons.js";
 
 const app = document.getElementById("app");
 const gameData = loadGameData();
@@ -50,6 +52,11 @@ function h(tag, props = {}, ...children) {
   }
   el.append(...children.flat().filter((child) => child != null && child !== false));
   return el;
+}
+
+// Square button holding a line icon, with an optional short label (reroll count).
+function iconButton(name, title, onclick, { variant = "secondary", className = "", disabled = false, label = null } = {}) {
+  return h("button", { class: `${variant} icon-button ${className}`.trim(), title, disabled, onclick }, icon(name), label && h("span", { class: "icon-label" }, label));
 }
 
 function nameInput() {
@@ -128,7 +135,8 @@ function showHome(message = "") {
         optionsToggle.setAttribute("aria-expanded", String(!optionsPanel.hidden));
       },
     },
-    "⚙ Options : ",
+    icon("options"),
+    "Options : ",
     optionsSummary,
     h("span", { class: "options-sign", "aria-hidden": "true" }),
   );
@@ -267,7 +275,7 @@ class RoomView {
     this.modeLabel = h("span", { class: "mode-badge" });
     this.resetButton = h("button", { class: "secondary", hidden: true, onclick: () => this.reset() }, "Tout réinitialiser");
     // Host padlock for the whole room, styled like the card padlocks.
-    this.lockAllButton = h("button", { class: "secondary lock-button lock-all", hidden: true, onclick: () => this.send({ type: "lockAll", locked: !this.room?.locked }) });
+    this.lockAllButton = h("button", { class: "secondary icon-button lock-button lock-all", hidden: true, onclick: () => this.send({ type: "lockAll", locked: !this.room?.locked }) });
     // "Prêts : 2/4" counts locked builds; also says when the host locked the room.
     this.readyLabel = h("div", { class: "ready-label" });
     this.playersEl = h("div", { class: "players" });
@@ -346,6 +354,25 @@ class RoomView {
     leaveToHome(`Tu as été exclu du salon ${this.code}.`);
   }
 
+  // Copies the own card as a PNG (to paste in Discord...), or downloads it.
+  async copyCard(button) {
+    const me = this.myPlayer();
+    if (!me?.build) return;
+    const image = cardImage({
+      player: me,
+      build: me.build,
+      data: this.data,
+      mode: this.room.mode,
+      // The image is drawn as text: the random role is spelled out instead of the dice.
+      roleLabel: this.usesRoles() ? `${this.roleLabel(me)}${me.role === "random" ? " (aléatoire)" : ""}` : null,
+    });
+    const result = await copyOrDownload(image, `ubchaos-${me.name}.png`);
+    button.dataset.state = result;
+    button.replaceChildren(icon(result === "copied" ? "check" : "download"));
+    button.title = result === "copied" ? "Image copiée : colle-la dans Discord" : "Image téléchargée";
+    setTimeout(() => button.replaceChildren(icon("copy")), 1500);
+  }
+
   promote(player) {
     if (confirm(`Nommer ${player.name} hôte du salon ? Tu perdras ce rôle.`)) {
       this.send({ type: "promote", playerId: player.id });
@@ -420,11 +447,17 @@ class RoomView {
     this.send({ type: "role", role: role === current ? null : role });
   }
 
-  // Short enough to fit next to the card buttons: "🎲 Support" for a rolled random role.
+  // Role name; for the random role, the rolled one once there is a build ("Support").
   roleLabel(player) {
     if (player.role !== "random") return ROLES[player.role];
     const rolled = player.build?.role;
-    return `🎲 ${rolled ? ROLES[rolled] : ROLES.random}`;
+    return rolled ? ROLES[rolled] : ROLES.random;
+  }
+
+  // Role badge, with a dice when the role was drawn at random.
+  roleBadge(player) {
+    const random = player.role === "random";
+    return h("span", { class: `role-badge ${random ? "random-role" : ""}`, title: random ? "Rôle tiré au hasard" : null }, random && icon("dice"), this.roleLabel(player));
   }
 
   usesCandidates() {
@@ -570,11 +603,12 @@ class RoomView {
       .join(" - ");
     this.resetButton.hidden = room.hostId !== this.me;
     this.lockAllButton.hidden = room.hostId !== this.me;
-    this.lockAllButton.textContent = room.locked ? "🔒" : "🔓";
+    this.lockAllButton.replaceChildren(icon(room.locked ? "lock" : "unlock"));
     this.lockAllButton.title = room.locked ? "Tout déverrouiller" : "Tout verrouiller";
     this.lockAllButton.classList.toggle("locked", Boolean(room.locked));
     const ready = room.players.filter((p) => p.locked && p.build).length;
-    this.readyLabel.textContent = room.locked ? "🔒 Salon verrouillé par l'hôte" : `Prêts : ${ready}/${room.players.length}`;
+    if (room.locked) this.readyLabel.replaceChildren(icon("lock"), "Salon verrouillé par l'hôte");
+    else this.readyLabel.replaceChildren(`Prêts : ${ready}/${room.players.length}`);
     this.readyLabel.classList.toggle("all-ready", room.locked || (ready > 0 && ready === room.players.length));
     const withCandidates = this.usesCandidates();
     const candidates = me?.candidates ?? [];
@@ -621,10 +655,16 @@ class RoomView {
     const generated = Boolean(player.build || player.options.length);
     const isMe = player.id === this.me;
     const classes = ["panel", "player", isMe && "me", !player.online && "offline"].filter(Boolean).join(" ");
+    const actions = [
+      ...(isMe && generated ? this.buildActions(player) : []),
+      !isMe && this.me === hostId && iconButton("crown", "Nommer hôte", () => this.promote(player)),
+      !isMe && this.me === hostId && iconButton("close", "Exclure du salon", () => this.kick(player), { variant: "danger" }),
+    ].filter(Boolean);
 
     return h(
       "article",
       { class: classes },
+      // Portrait, then name / champion / role stacked to its height.
       h(
         "div",
         { class: "player-head" },
@@ -633,18 +673,20 @@ class RoomView {
           : h("div", { class: `portrait ${randomPick ? "random-portrait" : ""}` }, randomPick ? "?" : ""),
         h(
           "div",
-          {},
-          h("div", { class: "row" }, h("span", { class: `dot ${player.online ? "on" : ""}` }), h("span", { class: "name" }, player.name), player.id === hostId && h("span", { title: "Hôte" }, "👑"), !isMe && player.locked && h("span", { title: "Build verrouillé : prêt" }, "🔒"), this.usesRoles() && player.role && h("span", { class: "role-badge" }, this.roleLabel(player))),
-          h("div", { class: "muted" }, champion ? champion.name : randomPick ? "Champion aléatoire" : this.usesCandidates() ? `${player.candidates.length}/${MAX_CANDIDATES} champions sélectionnés` : "Choisit son champion…"),
-        ),
-        h(
-          "div",
-          { class: "card-actions" },
-          isMe && generated && this.buildActions(player),
-          !isMe && this.me === hostId && h("button", { class: "secondary icon-button", title: "Nommer hôte", onclick: () => this.promote(player) }, "👑"),
-          !isMe && this.me === hostId && h("button", { class: "danger icon-button", title: "Exclure du salon", onclick: () => this.kick(player) }, "✕"),
+          { class: "player-info" },
+          h(
+            "div",
+            { class: "name-row" },
+            h("span", { class: `dot ${player.online ? "on" : ""}` }),
+            h("span", { class: "name" }, player.name),
+            player.id === hostId && h("span", { class: "state-icon host-icon", title: "Hôte" }, icon("crown")),
+            !isMe && player.locked && h("span", { class: "state-icon lock-indicator", title: "Build verrouillé : prêt" }, icon("lock")),
+          ),
+          h("div", { class: "muted champion-name" }, champion ? champion.name : randomPick ? "Champion aléatoire" : this.usesCandidates() ? `${player.candidates.length}/${MAX_CANDIDATES} champions sélectionnés` : "Choisit son champion…"),
+          this.usesRoles() && player.role && h("div", {}, this.roleBadge(player)),
         ),
       ),
+      actions.length > 0 && h("div", { class: "card-actions" }, actions),
       this.usesCandidates() && player.candidates.length > 0 && this.candidatesView(player),
       player.build
         ? this.buildView(player.build)
@@ -666,22 +708,18 @@ class RoomView {
     const rerollTitle = noReroll
       ? frozenTitle
       : `Regénérer avec les mêmes choix${remaining === null ? "" : ` (${remaining} reroll${remaining > 1 ? "s" : ""} restant${remaining > 1 ? "s" : ""})`}`;
+    const lockTitle = roomLocked ? "Salon verrouillé par l'hôte" : player.locked ? "Déverrouiller mon build" : "Verrouiller mon build (je suis prêt)";
     return [
+      player.build && iconButton("copy", "Copier ma carte en image", (e) => this.copyCard(e.currentTarget), { className: "copy-card" }),
       // Locking needs a kept build, not pending options.
       player.build &&
-        h(
-          "button",
-          {
-            class: `secondary icon-button lock-button ${player.locked ? "locked" : ""}`,
-            title: roomLocked ? "Salon verrouillé par l'hôte" : player.locked ? "Déverrouiller mon build" : "Verrouiller mon build (je suis prêt)",
-            disabled: roomLocked,
-            onclick: () => this.send({ type: "lock", locked: !player.locked }),
-          },
-          player.locked || roomLocked ? "🔒" : "🔓",
-        ),
-      h("button", { class: "secondary icon-button", title: rerollTitle, disabled: noReroll, onclick: () => this.roll() }, remaining === null ? "↺" : `↺ ${remaining}`),
-      h("button", { class: "danger icon-button", title: noReroll ? frozenTitle : "Effacer mes choix", disabled: noReroll, onclick: () => this.clearMine() }, "🗑"),
-    ];
+        iconButton(player.locked || roomLocked ? "lock" : "unlock", lockTitle, () => this.send({ type: "lock", locked: !player.locked }), {
+          className: `lock-button ${player.locked || roomLocked ? "locked" : ""}`,
+          disabled: roomLocked,
+        }),
+      iconButton("reroll", rerollTitle, () => this.roll(), { disabled: noReroll, label: remaining === null ? null : String(remaining), className: "reroll" }),
+      iconButton("trash", noReroll ? frozenTitle : "Effacer mes choix", () => this.clearMine(), { variant: "danger", disabled: noReroll, className: "clear" }),
+    ].filter(Boolean);
   }
 
   // Window over the page showing the offered builds side by side.

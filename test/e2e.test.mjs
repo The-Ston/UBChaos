@@ -68,7 +68,7 @@ const myCard = (page) =>
     champion: card.querySelector(".player-head .muted").textContent,
     role: card.querySelector(".role-badge")?.textContent ?? null,
     hasBuild: Boolean(card.querySelector(".build")),
-    actions: [...card.querySelectorAll(".card-actions button")].map((b) => b.textContent),
+    actions: [...card.querySelectorAll(".card-actions button")].map((b) => b.className.split(" ").filter((c) => !["secondary", "danger", "icon-button", "locked"].includes(c)).join(" ")),
   }));
 const generateButton = (page) => page.$eval(".picker .row:not(.role-toggle) button", (b) => ({ text: b.textContent, disabled: b.disabled }));
 
@@ -118,7 +118,8 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
     await page.click(".big-random");
     await page.waitForSelector(".player.me .build");
     const card = await myCard(page);
-    assert.match(card.role, /^🎲 (Top|Jungle|Mid|ADC|Support)$/);
+    assert.match(card.role, /^(Top|Jungle|Mid|ADC|Support)$/);
+    assert.ok(await page.$(".player.me .role-badge.random-role .icon"), "dice shown for a random role");
     assert.notEqual(card.champion, "Champion aléatoire");
 
     await page.click(".card-actions button[title='Effacer mes choix']");
@@ -165,12 +166,13 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
     assert.equal(new Set(tops).size, 1, "builds side by side");
 
     await page.click(".modal .card-actions button[title^='Regénérer']");
-    await page.waitForFunction(() => document.querySelector(".modal .card-actions button")?.textContent === "↺ 0");
+    await page.waitForFunction(() => document.querySelector(".modal .card-actions .reroll .icon-label")?.textContent === "0");
     await page.click(".modal .option:nth-child(2) .option-head button");
     await page.waitForFunction(() => document.querySelector(".modal-backdrop").hidden && document.querySelector(".player.me .build"));
     const card = await myCard(page);
-    assert.deepEqual(card.actions, ["🔓", "↺ 0", "🗑"]);
-    assert.ok(await page.$eval(".player.me .card-actions button[title^='Plus de reroll']", (b) => b.disabled), "no reroll left");
+    assert.deepEqual(card.actions, ["copy-card", "lock-button", "reroll", "clear"]);
+    assert.equal(await page.$eval(".player.me .card-actions .reroll", (b) => b.textContent), "0");
+    assert.ok(await page.$eval(".player.me .card-actions .reroll", (b) => b.disabled), "no reroll left");
   });
 
   it("host: promote and kick from the cards; kicked player is sent home", async () => {
@@ -188,7 +190,7 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
 
     await host.click(".player:not(.me) .card-actions button[title='Nommer hôte']");
     await guest.waitForFunction(() => document.querySelectorAll(".player .card-actions button[title='Exclure du salon']").length === 1);
-    assert.equal(await host.$$eval(".player .card-actions button[title='Exclure du salon']", (b) => b.length), 0);
+    await host.waitForFunction(() => document.querySelectorAll(".player .card-actions button[title='Exclure du salon']").length === 0);
   });
 
   it("locks: player ready lock and host room lock", async () => {
@@ -202,7 +204,7 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
 
     await guest.click(".player.me .lock-button");
     await host.waitForFunction(() => document.querySelector(".ready-label").textContent === "Prêts : 1/2");
-    assert.ok(await host.$eval(".player:not(.me) .name", (n) => n.parentElement.textContent.includes("🔒")), "lock visible to others");
+    assert.ok(await host.$(".player:not(.me) .lock-indicator"), "lock visible to others");
     assert.ok(await guest.$eval(".player.me .card-actions button[title='Build verrouillé']", (b) => b.disabled), "reroll disabled");
 
     await host.click(".lock-all[title='Tout verrouiller']");
@@ -212,6 +214,28 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
 
     await host.click(".lock-all[title='Tout déverrouiller']");
     await guest.waitForFunction(() => document.querySelector(".ready-label").textContent === "Prêts : 1/2");
+  });
+
+  it("copies the own card as a PNG image", async () => {
+    const page = await newPage("card-image");
+    await page.browserContext().overridePermissions(server.base, ["clipboard-read", "clipboard-write", "clipboard-sanitized-write"]);
+    await createRoom(page, "Photo", "ARAM du Chaos");
+    await page.click(".random-tile");
+    await wait(300);
+    await page.locator("::-p-text(Tirer mon build)").click();
+    await page.waitForSelector(".player.me .build");
+    await page.bringToFront();
+    await page.click(".card-actions button[title='Copier ma carte en image']");
+    await page.waitForSelector(".copy-card[data-state='copied']", { timeout: 15_000 });
+    const image = await page.evaluate(async () => {
+      const [item] = await navigator.clipboard.read();
+      const blob = await item.getType("image/png");
+      const bitmap = await createImageBitmap(blob);
+      return { type: blob.type, width: bitmap.width, height: bitmap.height };
+    });
+    assert.equal(image.type, "image/png");
+    assert.equal(image.width, 1120, "560 px at 2x");
+    assert.ok(image.height > 600, `height ${image.height}`);
   });
 
   it("phone: room fits the screen", async () => {
