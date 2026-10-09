@@ -435,3 +435,30 @@ body.picking main {
   font-family: ui-monospace, monospace;
   color: var(--muted);
 }
+
+.site-footer {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.site-footer summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.site-footer summary::-webkit-details-marker {
+  display: none;
+}
+
+.site-footer summary:hover {
+  color: var(--text);
+}
+
+.site-footer p {
+  margin: 6px auto 0;
+  max-width: 720px;
+}

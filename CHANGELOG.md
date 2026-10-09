@@ -14,3 +14,4 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 - Fuzzy champion search with initials and nicknames.
 - Per-player clear button; floating champion picker hidden once rolled.
 - Version and build number shown in the header.
+- Footer with signature, hosting and privacy notice, and Riot Games legal notice.
