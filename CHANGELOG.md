@@ -18,3 +18,5 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 - Footer with signature, hosting and privacy notice, and Riot Games legal notice; pinned to the bottom with a fade.
 - Click the room code to copy it.
 - Clear message when a room is full (10 players max).
+- Builds never contain two items from the same exclusive group (Hydras, Lifeline, Last Whisper...).
+- Cassiopeia gets no boots and an extra legendary instead.

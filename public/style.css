@@ -359,8 +359,28 @@ body.picking main {
   gap: 12px;
 }
 
+/* Three equal columns on one line, even on narrow screens. */
+.mode-toggle {
+  display: grid;
+  /* minmax(0, 1fr): columns stay equal even when a label is wider. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .mode-toggle > button {
-  flex: 1;
+  padding: 10px 2px;
+  font-size: clamp(0.62rem, 2.9vw, 0.9rem);
+  white-space: nowrap;
+}
+
+/* Small phones: tighter panels so the three modes fit on one line. */
+@media (max-width: 400px) {
+  .panel {
+    padding: 14px;
+  }
+
+  .mode-toggle {
+    gap: 6px;
+  }
 }
 
 .mode-toggle > button[aria-pressed="true"] {
@@ -385,9 +405,14 @@ body.picking main {
   gap: 6px;
 }
 
+.augment-legend {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+}
+
 .augment-row {
   display: grid;
-  grid-template-columns: 52px auto 1fr;
+  grid-template-columns: 52px auto;
   align-items: center;
   gap: 8px;
   font-size: 0.85rem;

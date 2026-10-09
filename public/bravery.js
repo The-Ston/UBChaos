@@ -43,6 +43,8 @@ const SKILLS_BY_CHAMPION = {
   Aphelios: ["Dégâts d'attaque", "Vitesse d'attaque", "Létalité"],
 };
 const DEFAULT_SKILLS = ["Q", "W", "E"];
+// Champions who cannot buy boots.
+const NO_BOOTS_CHAMPIONS = ["Cassiopeia"];
 
 export async function loadGameData() {
   const versions = await fetch(`${DDRAGON}/api/versions.json`).then((r) => r.json());
@@ -67,12 +69,14 @@ export async function loadGameData() {
     Object.entries(MODES).map(([mode, { map, spellMode }]) => {
       const onMap = shopItems.filter((item) => item.maps?.[map]);
       const boots = onMap.filter((item) => item.tags?.includes("Boots") && item.from?.includes("1001"));
-      const legendaries = uniqueByName(
-        onMap.filter(
-          (item) =>
-            !item.tags?.some((tag) => tag === "Boots" || tag === "Consumable" || tag === "Trinket") &&
-            !item.into?.length &&
-            item.gold.total >= LEGENDARY_MIN_GOLD,
+      const legendaries = withExclusiveGroups(
+        uniqueByName(
+          onMap.filter(
+            (item) =>
+              !item.tags?.some((tag) => tag === "Boots" || tag === "Consumable" || tag === "Trinket") &&
+              !item.into?.length &&
+              item.gold.total >= LEGENDARY_MIN_GOLD,
+          ),
         ),
       );
       const spells = allSpells.filter((spell) => spell.modes.includes(spellMode));
@@ -100,6 +104,42 @@ export async function loadGameData() {
       rune: (icon) => `${DDRAGON}/cdn/img/${icon}`,
     },
   };
+}
+
+// Items in the same group cannot be owned together. Unique passives sharing a
+// name form a group (Hydras, Lifeline, Spellblade...); some groups only share
+// a component: Last Whisper and Blighting Jewel.
+const EXCLUSIVE_COMPONENTS = ["3035", "4630"];
+
+function passiveNames(item) {
+  return [...new Set([...item.description.matchAll(/<passive>([^<]+)<\/passive>/g)].map((match) => match[1].trim()))];
+}
+
+function withExclusiveGroups(items) {
+  const counts = new Map();
+  for (const item of items) {
+    for (const name of passiveNames(item)) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return items.map((item) => ({
+    ...item,
+    groups: [
+      ...passiveNames(item).filter((name) => counts.get(name) > 1),
+      ...EXCLUSIVE_COMPONENTS.filter((id) => item.from?.includes(id)).map((id) => `from:${id}`),
+    ],
+  }));
+}
+
+// Like sample(), but never returns two items from the same exclusive group.
+function sampleCompatible(list, count) {
+  const takenGroups = new Set();
+  const result = [];
+  for (const item of shuffle(list)) {
+    if (item.groups.some((group) => takenGroups.has(group))) continue;
+    for (const group of item.groups) takenGroups.add(group);
+    result.push(item);
+    if (result.length === count) break;
+  }
+  return result;
 }
 
 function uniqueByName(list) {
@@ -133,17 +173,17 @@ export function rollBuild(data, mode, chosenRole = null, champion = null) {
   const pool = data.pools[mode] ?? data.pools.normal;
   const role = chosenRole === "random" ? pick(Object.keys(ROLES).filter((r) => r !== "random")) : chosenRole;
   const roleItems = pool.roleItems[role] ?? [];
-  // 6 slots: the role item (jungle, support) takes a legendary's slot; the ADC
-  // gets boots plus 6 legendaries since their boots end up in the quest slot.
-  const items =
-    role === "adc"
-      ? [pick(pool.boots), ...sample(pool.legendaries, 6)]
-      : roleItems.length
-        ? [pick(pool.boots), pick(roleItems), ...sample(pool.legendaries, 4)]
-        : [pick(pool.boots), ...sample(pool.legendaries, 5)];
+  const boots = NO_BOOTS_CHAMPIONS.includes(champion) ? [] : [pick(pool.boots)];
+  const roleItem = roleItems.length ? [pick(roleItems)] : [];
+  // 6 inventory slots shared by boots, the role item (jungle, support) and
+  // legendaries. The ADC's boots end up in the quest slot, freeing one.
+  const bootsInInventory = boots.length > 0 && role !== "adc";
+  const legendaryCount = 6 - roleItem.length - (bootsInInventory ? 1 : 0);
+  const items = [...boots, ...roleItem, ...sampleCompatible(pool.legendaries, legendaryCount)];
 
   return {
     role,
+    noBoots: boots.length === 0,
     items: items.map((item) => item.id),
     runes: MODES[mode]?.runes === false ? null : rollRunes(data),
     spells: sample(pool.spells, 2).map((spell) => spell.id),

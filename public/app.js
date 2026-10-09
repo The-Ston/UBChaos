@@ -448,7 +448,7 @@ class RoomView {
   }
 
   buildView(build) {
-    const icon = (src, title, cls) => h("img", { src, title, alt: title, class: cls, loading: "lazy" });
+    const icon = (src, title, cls) => h("img", { src, title, alt: title, class: cls });
     const rune = (id, cls) => {
       const r = findRune(this.data, id);
       return r ? icon(this.data.img.rune(r.icon), r.name, cls) : null;
@@ -477,7 +477,9 @@ class RoomView {
         build.skillOrder && h("span", { class: "skill-order" }, build.skillOrder.join(" > ")),
       ),
       build.augments && [h("div", { class: "section-label" }, "Optimisations"), this.augmentsView(build.augments)],
-      build.role === "adc" && h("p", { class: "build-note" }, "ADC : tes bottes passeront dans l'emplacement de quête, d'où un légendaire en plus."),
+      build.noBoots
+        ? h("p", { class: "build-note" }, "Pas de bottes pour ce champion, d'où un légendaire en plus.")
+        : build.role === "adc" && h("p", { class: "build-note" }, "ADC : tes bottes passeront dans l'emplacement de quête, d'où un légendaire en plus."),
     );
   }
 
@@ -489,11 +491,12 @@ class RoomView {
         const cards = [1, 2, 3].map((position) => {
           const rerolled = reroll.includes(position);
           const classes = ["augment-card", rerolled && "reroll", position === pick && "pick"].filter(Boolean).join(" ");
-          return h("span", { class: classes, title: rerolled ? "À reroll" : "" }, rerolled ? `${position} ↻` : String(position));
+          const title = [rerolled && "À reroll", position === pick && "À prendre"].filter(Boolean).join(", ");
+          return h("span", { class: classes, title }, rerolled ? `${position} ↻` : String(position));
         });
-        const summary = (reroll.length ? `Reroll ${reroll.join(", ")} · ` : "Aucun reroll · ") + `prends la ${pick}`;
-        return h("div", { class: "augment-row" }, h("span", { class: "augment-level" }, `Niv. ${level}`), h("div", { class: "row" }, cards), h("span", { class: "muted" }, summary));
+        return h("div", { class: "augment-row" }, h("span", { class: "augment-level" }, `Niv. ${level}`), h("div", { class: "row" }, cards));
       }),
+      h("p", { class: "muted augment-legend" }, "↻ : à reroll - encadré : à prendre après les rerolls"),
     );
   }
 }
