@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-09
+
 ### Added
 - Rooms shared by code or link, synced live between players (Cloudflare Durable Objects).
 - Game modes chosen at room creation: Normal, ARAM, ARAM du Chaos.

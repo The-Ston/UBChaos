@@ -12,13 +12,12 @@ Ultimate Bravery rooms for League of Legends, on Cloudflare Workers + Durable Ob
 
 Semantic versioning, single source of truth: `version` in `package.json`.
 - Build number = `git rev-list --count HEAD`, injected with the short commit SHA at deploy time (`BUILD_NUMBER`, `COMMIT_SHA` vars). Exposed at `/api/version` and shown in the header.
-- Major stays at `0` during the test phase. Only move to `1.0.0` when the user explicitly says it is the first real release.
+- First real release was `1.0.0` (2026-10-09); the 0.x test phase is over.
 
 ## Release procedure ("fais une release")
 
 1. Pick the bump from the changes since the last tag (`git log <last-tag>..HEAD`), unless the user names it:
-   - while major is 0: breaking or significant new feature set -> minor, everything else -> patch;
-   - from 1.0.0: breaking change -> major, new feature -> minor, fix only -> patch.
+   breaking change -> major, new feature -> minor, fix only -> patch.
    State the chosen bump and why.
 2. `npm version <bump> --no-git-tag-version`.
 3. In `CHANGELOG.md`, move `[Unreleased]` entries under `## [X.Y.Z] - YYYY-MM-DD` and leave an empty `[Unreleased]`.
