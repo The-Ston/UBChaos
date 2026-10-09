@@ -69,8 +69,12 @@ export class Room extends DurableObject<Env> {
     return true;
   }
 
-  async exists(): Promise<boolean> {
-    return (await this.ctx.storage.get<Meta>("meta")) !== undefined;
+  // Whether this player may enter: players already in the room can always come back.
+  async joinStatus(playerId: string): Promise<"ok" | "full" | "missing"> {
+    if (!(await this.ctx.storage.get<Meta>("meta"))) return "missing";
+    const players = await this.players();
+    if (players.some((p) => p.id === playerId)) return "ok";
+    return players.length >= MAX_PLAYERS ? "full" : "ok";
   }
 
   async fetch(request: Request): Promise<Response> {

@@ -15,4 +15,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 - Champion-specific skill orders: Udyr includes R, Aphelios gets a bonus stat priority.
 - Per-player clear button; floating champion picker hidden once rolled.
 - Version and build number shown in the header.
-- Footer with signature, hosting and privacy notice, and Riot Games legal notice.
+- Footer with signature, hosting and privacy notice, and Riot Games legal notice; pinned to the bottom with a fade.
+- Click the room code to copy it.
+- Clear message when a room is full (10 players max).

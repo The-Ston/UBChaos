@@ -129,10 +129,10 @@ function showHome(message = "") {
 // ---------- Room ----------
 
 async function showRoom(code) {
-  const res = await fetch(`/api/rooms/${code}`).catch(() => null);
+  const res = await fetch(`/api/rooms/${code}?playerId=${encodeURIComponent(playerId())}`).catch(() => null);
   if (!res?.ok) {
     history.replaceState(null, "", "/");
-    showHome(`Le salon ${code} n'existe pas ou a expiré.`);
+    showHome(res?.status === 403 ? `Le salon ${code} est complet (10 joueurs max).` : `Le salon ${code} n'existe pas ou a expiré.`);
     return;
   }
 
@@ -180,7 +180,8 @@ class RoomView {
   }
 
   start() {
-    this.status = h("span", { class: "status muted" }, "Connexion…");
+    // Only shown while the connection is down.
+    this.status = h("span", { class: "status muted", hidden: true });
     this.modeLabel = h("span", { class: "mode-badge" });
     this.resetButton = h("button", { class: "secondary", hidden: true, onclick: () => this.reset() }, "Tout réinitialiser");
     this.playersEl = h("div", { class: "players" });
@@ -216,7 +217,7 @@ class RoomView {
       h(
         "div",
         { class: "room-header" },
-        h("div", {}, h("div", { class: "section-label" }, "Code du salon"), h("div", { class: "row" }, h("span", { class: "room-code" }, this.code), this.modeLabel), this.status),
+        h("div", {}, h("div", { class: "section-label" }, "Code du salon"), h("div", { class: "row" }, h("button", { class: "room-code", title: "Copier le code", onclick: (e) => this.copyCode(e.currentTarget) }, h("span", { class: "code-text" }, this.code), h("span", { class: "copied-text" }, "Copié !")), this.modeLabel), this.status),
         h(
           "div",
           { class: "row" },
@@ -244,7 +245,7 @@ class RoomView {
 
     socket.addEventListener("open", () => {
       this.retryDelay = 1000;
-      this.status.textContent = "Connecté";
+      this.status.hidden = true;
     });
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
@@ -253,6 +254,7 @@ class RoomView {
     socket.addEventListener("close", () => {
       if (this.leaving) return;
       this.status.textContent = "Déconnecté, reconnexion…";
+      this.status.hidden = false;
       setTimeout(() => this.connect(), this.retryDelay);
       this.retryDelay = Math.min(this.retryDelay * 2, 10000);
     });
@@ -327,6 +329,17 @@ class RoomView {
     this.leaving = true;
     this.send({ type: "leave" });
     location.assign("/");
+  }
+
+  async copyCode(button) {
+    try {
+      await navigator.clipboard.writeText(this.code);
+      // The label overlays the code, so the button keeps its size.
+      button.classList.add("copied");
+      setTimeout(() => button.classList.remove("copied"), 1500);
+    } catch {
+      // Clipboard unavailable: the code stays visible to copy by hand.
+    }
   }
 
   async copyLink(button) {

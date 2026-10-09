@@ -56,7 +56,10 @@ export default {
       const room = env.ROOMS.getByName(code);
 
       if (!match[2]) {
-        return (await room.exists()) ? Response.json({ code }) : error(404, "Room not found");
+        const status = await room.joinStatus(url.searchParams.get("playerId") ?? "");
+        if (status === "missing") return error(404, "Room not found");
+        if (status === "full") return error(403, "Room is full");
+        return Response.json({ code });
       }
       if (request.headers.get("Upgrade") !== "websocket") {
         return error(426, "Expected WebSocket upgrade");

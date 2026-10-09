@@ -166,6 +166,41 @@ button.danger {
   font-weight: 800;
   letter-spacing: 0.2em;
   color: var(--gold-bright);
+  background: transparent;
+  border: 1px dashed transparent;
+  padding: 2px 8px;
+  margin-left: -8px;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.room-code {
+  position: relative;
+}
+
+.room-code .copied-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: system-ui, sans-serif;
+  font-size: 0.95rem;
+  letter-spacing: normal;
+  visibility: hidden;
+}
+
+.room-code.copied .code-text {
+  visibility: hidden;
+}
+
+.room-code.copied .copied-text {
+  visibility: visible;
+}
+
+.room-code:hover {
+  filter: none;
+  color: var(--gold);
+  border-color: var(--gold);
+  background: #2a2414;
 }
 
 .status {
@@ -267,7 +302,7 @@ button.danger {
 .picker {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: 40px;
   transform: translateX(-50%);
   z-index: 10;
   width: min(1068px, calc(100% - 32px));
@@ -280,7 +315,7 @@ button.danger {
 
 /* Leave room below the cards so the window never hides the last one. */
 body.picking main {
-  padding-bottom: calc(55vh + 32px);
+  padding-bottom: calc(55vh + 56px);
 }
 
 .champion-grid {
@@ -433,13 +468,32 @@ body.picking main {
   font-family: ui-monospace, monospace;
 }
 
+/* Pinned to the bottom, fading over the content behind it. */
 .site-footer {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 8px 16px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: 20px 16px 8px;
+  background: linear-gradient(to bottom, transparent, var(--bg) 65%);
   font-size: 0.7rem;
   color: var(--muted);
   text-align: center;
+  pointer-events: none;
+}
+
+.site-footer details {
+  pointer-events: auto;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.site-footer details[open] {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
 }
 
 .site-footer summary {
