@@ -6,6 +6,12 @@ const gameData = loadGameData();
 const MIN_CANDIDATES = 1;
 // Keep in sync with KICKED_CLOSE_CODE in src/room.ts.
 const KICKED_CLOSE_CODE = 4001;
+// Picked champion meaning "draw a random one when generating the build".
+const RANDOM_CHAMPION = "random";
+// Keep in sync with MAX_BUILD_CHOICES in src/room.ts.
+const MAX_BUILD_CHOICES = 5;
+// Reroll limits offered at room creation; null is unlimited.
+const REROLL_LIMITS = [0, 1, 2, 3, null];
 const MAX_CANDIDATES = 3;
 
 const storage = {
@@ -79,13 +85,68 @@ function showHome(message = "") {
     }
   }
 
+  let buildChoices = 1;
+  const choiceButtons = Array.from({ length: MAX_BUILD_CHOICES }, (_, i) =>
+    h("button", { class: "secondary", "aria-pressed": String(i === 0), onclick: () => selectChoices(i + 1) }, String(i + 1)),
+  );
+
+  function selectChoices(count) {
+    buildChoices = count;
+    for (const [i, button] of choiceButtons.entries()) button.setAttribute("aria-pressed", String(i + 1 === count));
+    updateOptionsSummary();
+  }
+
+  // null means unlimited.
+  let rerollLimit = null;
+  const rerollButtons = REROLL_LIMITS.map((limit) =>
+    h("button", { class: "secondary", "aria-pressed": String(limit === null), onclick: () => selectRerolls(limit) }, limit === null ? "∞" : String(limit)),
+  );
+
+  function selectRerolls(limit) {
+    rerollLimit = limit;
+    for (const [i, button] of rerollButtons.entries()) button.setAttribute("aria-pressed", String(REROLL_LIMITS[i] === limit));
+    updateOptionsSummary();
+  }
+
+  // Room options stay folded behind a one-line reminder of their values.
+  const optionsSummary = h("span", { class: "options-summary" });
+  const optionsPanel = h(
+    "div",
+    { class: "options-panel", hidden: true },
+    h("div", { class: "section-label" }, "Builds proposés au choix"),
+    h("div", { class: "row choice-toggle" }, choiceButtons),
+    h("div", { class: "section-label" }, "Rerolls autorisés"),
+    h("div", { class: "row choice-toggle" }, rerollButtons),
+  );
+  const optionsToggle = h(
+    "button",
+    {
+      class: "options-toggle",
+      "aria-expanded": "false",
+      onclick: () => {
+        optionsPanel.hidden = !optionsPanel.hidden;
+        optionsToggle.setAttribute("aria-expanded", String(!optionsPanel.hidden));
+      },
+    },
+    "⚙ Options : ",
+    optionsSummary,
+    h("span", { class: "options-sign", "aria-hidden": "true" }),
+  );
+
+  function updateOptionsSummary() {
+    const builds = buildChoices === 1 ? "1 build" : `${buildChoices} builds au choix`;
+    const rerolls = rerollLimit === null ? "rerolls illimités" : `${rerollLimit} reroll${rerollLimit > 1 ? "s" : ""}`;
+    optionsSummary.textContent = `${builds}, ${rerolls}`;
+  }
+  updateOptionsSummary();
+
   async function create() {
     if (!readName(name, error)) return;
     error.textContent = "";
     const res = await fetch("/api/rooms", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ playerId: playerId(), mode }),
+      body: JSON.stringify({ playerId: playerId(), mode, buildChoices, rerollLimit }),
     }).catch(() => null);
     if (!res?.ok) {
       error.textContent = "Impossible de créer le salon.";
@@ -116,6 +177,8 @@ function showHome(message = "") {
         { class: "panel create" },
         h("div", { class: "section-label" }, "Mode de jeu"),
         h("div", { class: "row mode-toggle" }, modeButtons),
+        optionsToggle,
+        optionsPanel,
         h("button", { onclick: create }, "Créer un salon"),
       ),
       h(
@@ -195,8 +258,15 @@ class RoomView {
     this.resetButton = h("button", { class: "secondary", hidden: true, onclick: () => this.reset() }, "Tout réinitialiser");
     this.playersEl = h("div", { class: "players" });
     this.search = h("input", { placeholder: "Rechercher un champion…", oninput: () => this.filterChampions() });
-    this.rollButton = h("button", { disabled: true, onclick: () => this.roll() }, "Tirer mon build");
-    this.randomButton = h("button", { class: "secondary", onclick: () => this.allRandom() }, "Tout aléatoire");
+    this.rollButton = h("button", { disabled: true, onclick: () => this.roll() }, "Générer mon build");
+    // Normal mode only: one click rolls role, champion and build.
+    this.randomBlock = h(
+      "div",
+      { class: "random-block" },
+      h("button", { class: "big-random", onclick: () => this.allRandom() }, "Tout aléatoire"),
+      h("div", { class: "divider" }, "ou choisis toi-même"),
+    );
+    this.championLabel = h("div", { class: "section-label" }, "Ton champion");
     this.roleButtons = Object.entries(ROLES).map(([role, label]) =>
       h("button", { class: "secondary", "data-role": role, "aria-pressed": "false", onclick: () => this.selectRole(role) }, label),
     );
@@ -212,13 +282,24 @@ class RoomView {
       ),
     );
 
-    this.championGrid = h("div", { class: "champion-grid" }, this.championButtons);
+    // Normal mode: a "champion" tile meaning "draw one at generation time".
+    this.randomChampionTile = h(
+      "button",
+      { title: "Champion aléatoire", class: "random-tile", onclick: () => this.clickChampion(RANDOM_CHAMPION) },
+      h("span", { class: "random-portrait" }, "?"),
+      "Aléatoire",
+    );
+    this.championGrid = h("div", { class: "champion-grid" }, this.randomChampionTile, this.championButtons);
+    this.optionsModal = h("div", { class: "modal-backdrop", hidden: true });
+    // Hidden until the first room state arrives, so nothing is sent on a closed socket.
     this.picker = h(
       "section",
-      { class: "panel picker" },
+      { class: "panel picker", hidden: true },
+      this.randomBlock,
       this.rolePicker,
       this.pickerHint,
-      h("div", { class: "row" }, this.search, this.randomButton, this.rollButton),
+      this.championLabel,
+      h("div", { class: "row" }, this.search, this.rollButton),
       this.championGrid,
     );
 
@@ -237,6 +318,7 @@ class RoomView {
       ),
       this.playersEl,
       this.picker,
+      this.optionsModal,
     );
 
     this.connect();
@@ -246,7 +328,7 @@ class RoomView {
     if (this.leaving) return;
     this.leaving = true;
     this.socket?.close();
-    document.body.classList.remove("picking");
+    document.body.classList.remove("picking", "modal-open");
     history.replaceState(null, "", "/");
     showHome(`Tu as été exclu du salon ${this.code}.`);
   }
@@ -258,7 +340,7 @@ class RoomView {
   }
 
   clearMine() {
-    if (confirm("Effacer ton build et recommencer depuis le début ?")) this.send({ type: "clear" });
+    if (confirm("Effacer ton build et tes choix pour recommencer ?")) this.send({ type: "clear" });
   }
 
   connect() {
@@ -320,7 +402,9 @@ class RoomView {
       this.send({ type: "pick", champion: id });
       return;
     }
-    const candidates = this.myPlayer()?.candidates ?? [];
+    // The random tile excludes real champions, and vice versa.
+    const current = this.myPlayer()?.candidates ?? [];
+    const candidates = id === RANDOM_CHAMPION ? current.filter((c) => c === RANDOM_CHAMPION) : current.filter((c) => c !== RANDOM_CHAMPION);
     if (candidates.includes(id)) {
       this.send({ type: "candidates", champions: candidates.filter((c) => c !== id) });
     } else if (candidates.length < MAX_CANDIDATES) {
@@ -328,26 +412,61 @@ class RoomView {
     }
   }
 
+  // Generates a build from the current choices, which are left untouched so the
+  // same roll can be redone: "random" picks are drawn again each time and the
+  // drawn champion is stored in the build.
   roll() {
     const me = this.myPlayer();
+    // A first generation is always allowed; later ones need a reroll left.
+    if (me?.generations > 0 && this.rerollsLeft(me) <= 0) return;
     if (this.usesCandidates()) {
       if ((me?.candidates.length ?? 0) < MIN_CANDIDATES) return;
-      const champion = me.candidates[Math.floor(Math.random() * me.candidates.length)];
-      this.send({ type: "pick", champion });
-      this.send({ type: "build", build: rollBuild(this.data, this.room.mode, me.role, champion) });
-      return;
+      this.sendBuilds(() => this.rollOne(me.role, me.candidates[Math.floor(Math.random() * me.candidates.length)]));
+    } else {
+      if (!me?.champion || (this.usesRoles() && !me.role)) return;
+      this.sendBuilds(() => this.rollOne(me.role, me.champion));
     }
-    if (!me?.champion || (this.usesRoles() && !me.role)) return;
-    this.send({ type: "build", build: rollBuild(this.data, this.room.mode, me.role, me.champion) });
   }
 
+  // One build for a champion choice, which may be the random pick.
+  rollOne(role, choice) {
+    const champion = choice === RANDOM_CHAMPION ? randomChampion(this.data, this.takenChampions()) : choice;
+    return rollBuild(this.data, this.room.mode, role, champion);
+  }
+
+  // Sends one build, or several independent ones to choose from when the room offers them.
+  sendBuilds(makeBuild) {
+    const count = this.room?.buildChoices ?? 1;
+    if (count < 2) this.send({ type: "build", build: makeBuild() });
+    else this.send({ type: "options", builds: Array.from({ length: count }, () => makeBuild()) });
+  }
+
+  // Rerolls a player has left, or null when unlimited. The first generation is free.
+  rerollsLeft(player) {
+    const limit = this.room?.rerollLimit ?? null;
+    if (limit === null) return null;
+    return limit - Math.max(0, (player?.generations ?? 0) - 1);
+  }
+
+  // Champion actually played by a player: the drawn one once a build exists.
+  playedChampion(player) {
+    return player.build?.champion ?? (player.champion === RANDOM_CHAMPION ? null : player.champion);
+  }
+
+  // Real champions already played or picked by the other players.
+  takenChampions() {
+    return (this.room?.players ?? [])
+      .filter((p) => p.id !== this.me)
+      .map((p) => this.playedChampion(p))
+      .filter(Boolean);
+  }
+
+  // Rolls everything: the role (when the mode has roles), the champion and the build.
   allRandom() {
-    const taken = (this.room?.players ?? []).filter((p) => p.id !== this.me && p.champion).map((p) => p.champion);
-    const role = this.myPlayer()?.role ?? null;
-    if (this.usesRoles() && !role) return;
-    const champion = randomChampion(this.data, taken);
-    this.send({ type: "pick", champion });
-    this.send({ type: "build", build: rollBuild(this.data, this.room?.mode, role, champion) });
+    const role = this.usesRoles() ? "random" : null;
+    if (role) this.send({ type: "role", role });
+    this.send({ type: "pick", champion: RANDOM_CHAMPION });
+    this.sendBuilds(() => this.rollOne(role, RANDOM_CHAMPION));
   }
 
   reset() {
@@ -388,27 +507,45 @@ class RoomView {
       .map((button) => ({ button, rank: searchRank(this.searchKeys.get(button.dataset.id), query) }))
       .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
     for (const { button, rank } of ranked) button.hidden = rank === null;
-    this.championGrid.replaceChildren(...ranked.map(({ button }) => button));
+    this.championGrid.replaceChildren(this.randomChampionTile, ...ranked.map(({ button }) => button));
+    this.updateRandomTile();
+  }
+
+  // Hidden while searching.
+  updateRandomTile() {
+    const me = this.myPlayer();
+    const selected = this.usesCandidates() ? (me?.candidates ?? []).includes(RANDOM_CHAMPION) : me?.champion === RANDOM_CHAMPION;
+    this.randomChampionTile.hidden = this.search.value.trim() !== "";
+    this.randomChampionTile.classList.toggle("selected", selected);
   }
 
   render(room) {
     this.room = room;
     const me = this.myPlayer();
-    const taken = new Set(room.players.filter((p) => p.id !== this.me && p.champion).map((p) => p.champion));
+    const taken = new Set(this.takenChampions());
 
-    this.modeLabel.textContent = MODES[room.mode]?.label ?? room.mode;
+    const choices = room.buildChoices ?? 1;
+    const limit = room.rerollLimit ?? null;
+    this.modeLabel.textContent = [
+      MODES[room.mode]?.label ?? room.mode,
+      choices > 1 && `${choices} builds au choix`,
+      limit !== null && `${limit} reroll${limit > 1 ? "s" : ""}`,
+    ]
+      .filter(Boolean)
+      .join(" - ");
     this.resetButton.hidden = room.hostId !== this.me;
     const withCandidates = this.usesCandidates();
     const candidates = me?.candidates ?? [];
     // Once rolled, the picker only takes space; the card's clear button brings it back.
-    this.picker.hidden = Boolean(me?.build);
+    this.picker.hidden = Boolean(me?.build || me?.options?.length);
     document.body.classList.toggle("picking", !this.picker.hidden);
     this.rolePicker.hidden = !this.usesRoles();
     for (const button of this.roleButtons) {
       button.setAttribute("aria-pressed", String(button.dataset.role === me?.role));
     }
     this.pickerHint.hidden = !withCandidates;
-    this.randomButton.hidden = withCandidates;
+    this.randomBlock.hidden = withCandidates;
+    this.championLabel.hidden = withCandidates;
     if (withCandidates) {
       this.rollButton.disabled = candidates.length < MIN_CANDIDATES;
       this.rollButton.textContent =
@@ -420,21 +557,25 @@ class RoomView {
     } else {
       const needsRole = this.usesRoles() && !me?.role;
       this.rollButton.disabled = !me?.champion || needsRole;
-      this.randomButton.disabled = needsRole;
-      this.rollButton.textContent = needsRole ? "Choisis ton rôle" : me?.build ? "Relancer mon build" : "Tirer mon build";
+      this.rollButton.textContent = needsRole ? "Choisis ton rôle" : !me?.champion ? "Choisis ton champion" : "Générer mon build";
     }
     for (const button of this.championButtons) {
       button.classList.toggle("selected", withCandidates ? candidates.includes(button.dataset.id) : button.dataset.id === me?.champion);
       button.classList.toggle("taken", taken.has(button.dataset.id));
     }
+    this.updateRandomTile();
 
     // Own card first, then by arrival order.
     const players = [...room.players].sort((a, b) => (b.id === this.me) - (a.id === this.me) || a.joinedAt - b.joinedAt);
     this.playersEl.replaceChildren(...players.map((player) => this.playerCard(player, room.hostId)));
+    this.renderOptionsModal(me);
   }
 
   playerCard(player, hostId) {
-    const champion = player.champion ? this.data.championsById[player.champion] : null;
+    const played = this.playedChampion(player);
+    const champion = played ? this.data.championsById[played] : null;
+    const randomPick = !player.build && player.champion === RANDOM_CHAMPION;
+    const generated = Boolean(player.build || player.options.length);
     const isMe = player.id === this.me;
     const classes = ["panel", "player", isMe && "me", !player.online && "offline"].filter(Boolean).join(" ");
 
@@ -446,22 +587,86 @@ class RoomView {
         { class: "player-head" },
         champion
           ? h("img", { class: "portrait", src: this.data.img.champion(champion.id), alt: champion.name, title: champion.name })
-          : h("div", { class: "portrait" }),
+          : h("div", { class: `portrait ${randomPick ? "random-portrait" : ""}` }, randomPick ? "?" : ""),
         h(
           "div",
           {},
           h("div", { class: "row" }, h("span", { class: `dot ${player.online ? "on" : ""}` }), h("span", { class: "name" }, player.name), player.id === hostId && h("span", { title: "Hôte" }, "👑"), this.usesRoles() && player.role && h("span", { class: "role-badge" }, this.roleLabel(player))),
-          h("div", { class: "muted" }, champion ? champion.name : this.usesCandidates() ? `${player.candidates.length}/${MAX_CANDIDATES} champions sélectionnés` : "Choisit son champion…"),
+          h("div", { class: "muted" }, champion ? champion.name : randomPick ? "Champion aléatoire" : this.usesCandidates() ? `${player.candidates.length}/${MAX_CANDIDATES} champions sélectionnés` : "Choisit son champion…"),
         ),
-        isMe && player.build && h("button", { class: "secondary icon-button", title: "Effacer et recommencer", onclick: () => this.clearMine() }, "↺"),
-        !isMe && this.me === hostId && h("button", { class: "danger icon-button", title: "Exclure du salon", onclick: () => this.kick(player) }, "✕"),
+        h(
+          "div",
+          { class: "card-actions" },
+          isMe && generated && this.buildActions(player),
+          !isMe && this.me === hostId && h("button", { class: "danger icon-button", title: "Exclure du salon", onclick: () => this.kick(player) }, "✕"),
+        ),
       ),
       this.usesCandidates() && player.candidates.length > 0 && this.candidatesView(player),
-      player.build ? this.buildView(player.build) : champion && h("p", { class: "muted" }, "Pas encore de build."),
+      player.build
+        ? this.buildView(player.build)
+        : player.options.length
+          ? h("p", { class: "muted" }, isMe ? "Choisis ton build dans la fenêtre." : `Choisit parmi ${player.options.length} builds…`)
+          : champion && h("p", { class: "muted" }, "Pas encore de build."),
+    );
+  }
+
+  // ↺ (regenerate with the same choices) and the bin (clear the choices), for the own card and the options window.
+  buildActions(player) {
+    const remaining = this.rerollsLeft(player);
+    const noReroll = remaining !== null && remaining <= 0;
+    const rerollTitle = noReroll
+      ? "Plus de reroll : build définitif"
+      : `Regénérer avec les mêmes choix${remaining === null ? "" : ` (${remaining} reroll${remaining > 1 ? "s" : ""} restant${remaining > 1 ? "s" : ""})`}`;
+    return [
+      h("button", { class: "secondary icon-button", title: rerollTitle, disabled: noReroll, onclick: () => this.roll() }, remaining === null ? "↺" : `↺ ${remaining}`),
+      h("button", { class: "danger icon-button", title: noReroll ? "Plus de reroll : build définitif" : "Effacer mes choix", disabled: noReroll, onclick: () => this.clearMine() }, "🗑"),
+    ];
+  }
+
+  // Window over the page showing the offered builds side by side.
+  renderOptionsModal(me) {
+    const options = me?.options ?? [];
+    this.optionsModal.hidden = options.length === 0;
+    document.body.classList.toggle("modal-open", options.length > 0);
+    if (!options.length) return;
+    this.optionsModal.replaceChildren(
+      h(
+        "div",
+        { class: "modal" },
+        h("div", { class: "modal-head" }, h("h2", {}, "Choisis ton build"), h("div", { class: "card-actions" }, this.buildActions(me))),
+        this.optionsView(options),
+      ),
+    );
+  }
+
+  // Builds offered to the player, each with its own champion and role draws.
+  optionsView(options) {
+    return h(
+      "div",
+      { class: "options" },
+      options.map((build, index) => {
+        const champion = this.data.championsById[build.champion];
+        const title = [`Build ${index + 1}`, champion?.name, build.role && ROLES[build.role]].filter(Boolean).join(" - ");
+        return h(
+          "section",
+          { class: "option" },
+          h(
+            "div",
+            { class: "option-head" },
+            champion && h("img", { class: "option-portrait", src: this.data.img.champion(champion.id), alt: champion.name }),
+            h("span", { class: "option-title" }, title),
+            h("button", { onclick: () => this.send({ type: "choose", index }) }, "Choisir"),
+          ),
+          this.buildView(build),
+        );
+      }),
     );
   }
 
   candidatesView(player) {
+    const played = player.build?.champion;
+    // A drawn champion that is not among the candidates came from the random tile.
+    const isPlayed = (id) => id === played || (id === RANDOM_CHAMPION && played && !player.candidates.includes(played));
     return h(
       "div",
       {},
@@ -470,8 +675,12 @@ class RoomView {
         "div",
         { class: "icons small" },
         player.candidates.map((id) => {
+          const cls = isPlayed(id) ? "keystone" : "";
+          if (id === RANDOM_CHAMPION) {
+            return h("span", { class: `random-portrait random-icon ${cls}`, title: "Champion aléatoire" }, "?");
+          }
           const name = this.data.championsById[id]?.name ?? id;
-          return h("img", { src: this.data.img.champion(id), title: name, alt: name, class: id === player.champion ? "keystone" : "" });
+          return h("img", { src: this.data.img.champion(id), title: name, alt: name, class: cls });
         }),
       ),
     );

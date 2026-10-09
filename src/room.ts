@@ -11,9 +11,12 @@ type Role = (typeof ROLES)[number];
 const PLAYER_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const CHAMPION_RE = /^[A-Za-z0-9]{1,32}$/;
 const MAX_NAME_LENGTH = 24;
-const MAX_MESSAGE_BYTES = 16 * 1024;
+const MAX_MESSAGE_BYTES = 32 * 1024;
 const MAX_BUILD_BYTES = 4 * 1024;
 const MAX_PLAYERS = 10;
+// How many builds a player may be offered to choose from.
+export const MAX_BUILD_CHOICES = 5;
+export const MAX_REROLL_LIMIT = 10;
 // In ARAM modes a player selects their champion or the few the game offers them.
 const CANDIDATE_MODES: ReadonlySet<RoomMode> = new Set(["aram", "aram-chaos"]);
 const MIN_CANDIDATES = 1;
@@ -25,6 +28,10 @@ interface Meta {
   code: string;
   hostId: string;
   mode: RoomMode;
+  // Builds offered per generation; the player keeps one.
+  buildChoices: number;
+  // Rerolls allowed per player; null means unlimited.
+  rerollLimit: number | null;
   createdAt: number;
 }
 
@@ -37,6 +44,10 @@ interface Player {
   role: Role | null;
   // Rolled by the client from Data Dragon; stored and relayed as-is.
   build: unknown;
+  // Pending builds to choose from when the room offers several.
+  options: unknown[];
+  // Builds generated so far (single builds or sets of options); all but the first are rerolls.
+  generations: number;
   joinedAt: number;
 }
 
@@ -49,14 +60,27 @@ type ClientMessage =
   | { type: "candidates"; champions: string[] }
   | { type: "role"; role: Role | null }
   | { type: "build"; build: unknown }
+  | { type: "options"; builds: unknown[] }
+  | { type: "choose"; index: number }
   | { type: "rename"; name: string }
   | { type: "clear" }
   | { type: "leave" }
   | { type: "kick"; playerId: string }
   | { type: "reset" };
 
+// Keep in sync with RANDOM_CHAMPION in public/app.js.
+const RANDOM_CHAMPION = "random";
+
 // WebSocket close code telling a client it was kicked by the host.
 export const KICKED_CLOSE_CODE = 4001;
+
+// Messages that would roll again or change the choices behind a generated build.
+const LOCKABLE_MESSAGES = new Set<ClientMessage["type"]>(["pick", "candidates", "role", "clear", "build", "options"]);
+
+function isLocked(meta: Meta, player: Player): boolean {
+  const limit = meta.rerollLimit ?? null;
+  return limit !== null && (player.generations ?? 0) > limit;
+}
 
 function cleanName(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -65,9 +89,9 @@ function cleanName(raw: unknown): string | null {
 }
 
 export class Room extends DurableObject<Env> {
-  async create(code: string, hostId: string, mode: RoomMode): Promise<boolean> {
+  async create(code: string, hostId: string, mode: RoomMode, buildChoices: number, rerollLimit: number | null): Promise<boolean> {
     if (await this.ctx.storage.get<Meta>("meta")) return false;
-    await this.ctx.storage.put<Meta>("meta", { code, hostId, mode, createdAt: Date.now() });
+    await this.ctx.storage.put<Meta>("meta", { code, hostId, mode, buildChoices, rerollLimit, createdAt: Date.now() });
     await this.ctx.storage.put<Player[]>("players", []);
     await this.touch();
     return true;
@@ -98,7 +122,7 @@ export class Room extends DurableObject<Env> {
     let player = players.find((p) => p.id === playerId);
     if (!player) {
       if (players.length >= MAX_PLAYERS) return new Response("Room is full", { status: 403 });
-      player = { id: playerId, name, champion: null, candidates: [], role: null, build: null, joinedAt: Date.now() };
+      player = { id: playerId, name, champion: null, candidates: [], role: null, build: null, options: [], generations: 0, joinedAt: Date.now() };
       players.push(player);
     } else {
       player.name = name;
@@ -128,6 +152,8 @@ export class Room extends DurableObject<Env> {
     let players = await this.players();
     const player = players.find((p) => p.id === playerId);
     if (!meta || !player) return;
+    // Out of rerolls, the generated build is final: no new roll and no edits.
+    if (LOCKABLE_MESSAGES.has(message.type) && isLocked(meta, player)) return;
 
     switch (message.type) {
       case "pick":
@@ -138,24 +164,46 @@ export class Room extends DurableObject<Env> {
         }
         player.champion = message.champion;
         player.build = null;
+        player.options = [];
         break;
       case "candidates": {
         if (!CANDIDATE_MODES.has(meta.mode) || !Array.isArray(message.champions)) return;
         const champions = [...new Set(message.champions)];
         if (champions.length > MAX_CANDIDATES || !champions.every((c) => typeof c === "string" && CHAMPION_RE.test(c))) return;
+        // The random pick cannot be combined with real champions.
+        if (champions.length > 1 && champions.includes(RANDOM_CHAMPION)) return;
         player.candidates = champions;
         player.champion = null;
         player.build = null;
+        player.options = [];
         break;
       }
       case "build":
         if (JSON.stringify(message.build ?? null).length > MAX_BUILD_BYTES) return;
         player.build = message.build ?? null;
+        player.generations = (player.generations ?? 0) + 1;
         break;
+      case "options": {
+        const builds = message.builds;
+        if ((meta.buildChoices ?? 1) < 2 || !Array.isArray(builds) || builds.length !== meta.buildChoices) return;
+        if (builds.some((build) => JSON.stringify(build ?? null).length > MAX_BUILD_BYTES)) return;
+        player.options = builds;
+        player.build = null;
+        player.generations = (player.generations ?? 0) + 1;
+        break;
+      }
+      case "choose": {
+        const option = player.options?.[message.index];
+        if (!Number.isInteger(message.index) || option === undefined) return;
+        player.build = option;
+        player.options = [];
+        break;
+      }
       case "role":
         if (meta.mode !== "normal" || (message.role !== null && !ROLES.includes(message.role))) return;
         player.role = message.role;
         player.build = null;
+        player.options = [];
         break;
       case "rename": {
         const name = cleanName(message.name);
@@ -173,6 +221,7 @@ export class Room extends DurableObject<Env> {
         player.candidates = [];
         player.role = null;
         player.build = null;
+        player.options = [];
         break;
       // Host only. The kicked player stays banned from this room for its lifetime.
       case "kick": {
@@ -195,6 +244,8 @@ export class Room extends DurableObject<Env> {
           p.champion = null;
           p.candidates = [];
           p.build = null;
+          p.options = [];
+          p.generations = 0;
         }
         break;
       default:
@@ -246,11 +297,11 @@ export class Room extends DurableObject<Env> {
     if (!meta) return;
     const sockets = this.ctx.getWebSockets().filter((ws) => ws !== closing);
     const online = new Set(sockets.map((ws) => (ws.deserializeAttachment() as Attachment).playerId));
-    const players = (await this.players()).map((p) => ({ ...p, candidates: p.candidates ?? [], role: p.role ?? null, online: online.has(p.id) }));
+    const players = (await this.players()).map((p) => ({ ...p, candidates: p.candidates ?? [], role: p.role ?? null, options: p.options ?? [], generations: p.generations ?? 0, online: online.has(p.id) }));
 
     const payload = JSON.stringify({
       type: "state",
-      room: { code: meta.code, hostId: meta.hostId, mode: meta.mode ?? "normal", players },
+      room: { code: meta.code, hostId: meta.hostId, mode: meta.mode ?? "normal", buildChoices: meta.buildChoices ?? 1, rerollLimit: meta.rerollLimit ?? null, players },
     });
     for (const ws of sockets) {
       try {

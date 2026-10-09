@@ -183,6 +183,8 @@ export function rollBuild(data, mode, chosenRole = null, champion = null) {
     items: items.map((item) => item.id),
     runes: MODES[mode]?.runes === false ? null : rollRunes(data),
     spells: rollSpells(pool, role),
+    // The champion actually played: the player's pick may be "random".
+    champion,
     skillOrder: rollSkillOrder(champion),
     augments: MODES[mode]?.augments ? rollAugments() : null,
   };

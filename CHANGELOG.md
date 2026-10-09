@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ### Added
 - The host can kick a player, who cannot rejoin that room.
+- Normal mode picker: big "Tout aléatoire" button (role, champion and build), then roles, then champions.
+- "Aléatoire" champion tile in every mode: the champion is drawn when generating the build.
+- Card buttons: ↺ regenerates with the same choices, the red bin clears them.
+- Room option at creation: offer 1 to 5 builds per generation, the player keeps one.
+- Room option at creation: rerolls allowed (0 to 3, or unlimited); out of rerolls, the build is final.
+- Room options folded behind a one-line summary on the home page.
+- Offered builds shown side by side in a window over the page.
 
 ### Fixed
 - Cassiopeia gets boots again: she can buy them since patch 26.01.

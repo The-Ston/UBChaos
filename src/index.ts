@@ -1,5 +1,5 @@
 import pkg from "../package.json";
-import { CODE_RE, ROOM_MODES, Room, type RoomMode } from "./room";
+import { CODE_RE, MAX_BUILD_CHOICES, MAX_REROLL_LIMIT, ROOM_MODES, Room, type RoomMode } from "./room";
 
 export { Room };
 
@@ -17,7 +17,7 @@ function error(status: number, message: string): Response {
 }
 
 async function createRoom(request: Request, env: Env): Promise<Response> {
-  type Body = { playerId?: unknown; mode?: unknown };
+  type Body = { playerId?: unknown; mode?: unknown; buildChoices?: unknown; rerollLimit?: unknown };
   const body = await request.json<Body>().catch(() => ({}) as Body);
   if (typeof body.playerId !== "string" || !PLAYER_ID_RE.test(body.playerId)) {
     return error(400, "Invalid player id");
@@ -26,10 +26,19 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
     return error(400, "Invalid mode");
   }
   const mode = body.mode as RoomMode;
+  const buildChoices = body.buildChoices ?? 1;
+  if (!Number.isInteger(buildChoices) || (buildChoices as number) < 1 || (buildChoices as number) > MAX_BUILD_CHOICES) {
+    return error(400, "Invalid build choices");
+  }
+  // null (or absent) means unlimited rerolls.
+  const rerollLimit = body.rerollLimit ?? null;
+  if (rerollLimit !== null && (!Number.isInteger(rerollLimit) || (rerollLimit as number) < 0 || (rerollLimit as number) > MAX_REROLL_LIMIT)) {
+    return error(400, "Invalid reroll limit");
+  }
   // Codes are short, so retry on the rare collision with a live room.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomCode();
-    if (await env.ROOMS.getByName(code).create(code, body.playerId, mode)) {
+    if (await env.ROOMS.getByName(code).create(code, body.playerId, mode, buildChoices as number, rerollLimit as number | null)) {
       return Response.json({ code });
     }
   }
