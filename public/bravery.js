@@ -36,6 +36,13 @@ export const ROLES = {
   random: "Aléatoire",
 };
 const SUPPORT_QUEST_ITEM = "3867";
+// What gets a rolled max order. Udyr can rank R from level 1 like his other
+// abilities; Aphelios spends his points on bonus stats instead of abilities.
+const SKILLS_BY_CHAMPION = {
+  Udyr: ["Q", "W", "E", "R"],
+  Aphelios: ["Dégâts d'attaque", "Vitesse d'attaque", "Létalité"],
+};
+const DEFAULT_SKILLS = ["Q", "W", "E"];
 
 export async function loadGameData() {
   const versions = await fetch(`${DDRAGON}/api/versions.json`).then((r) => r.json());
@@ -122,7 +129,7 @@ export function randomChampion(data, exclude = []) {
   return pick(pool.length ? pool : data.champions).id;
 }
 
-export function rollBuild(data, mode, chosenRole = null) {
+export function rollBuild(data, mode, chosenRole = null, champion = null) {
   const pool = data.pools[mode] ?? data.pools.normal;
   const role = chosenRole === "random" ? pick(Object.keys(ROLES).filter((r) => r !== "random")) : chosenRole;
   const roleItems = pool.roleItems[role] ?? [];
@@ -140,9 +147,13 @@ export function rollBuild(data, mode, chosenRole = null) {
     items: items.map((item) => item.id),
     runes: MODES[mode]?.runes === false ? null : rollRunes(data),
     spells: sample(pool.spells, 2).map((spell) => spell.id),
-    skillOrder: shuffle(["Q", "W", "E"]),
+    skillOrder: rollSkillOrder(champion),
     augments: MODES[mode]?.augments ? rollAugments() : null,
   };
+}
+
+function rollSkillOrder(champion) {
+  return shuffle(SKILLS_BY_CHAMPION[champion] ?? DEFAULT_SKILLS);
 }
 
 // Augments are not in Data Dragon, so the roll only says which card positions

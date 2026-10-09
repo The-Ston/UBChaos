@@ -303,18 +303,20 @@ class RoomView {
       if ((me?.candidates.length ?? 0) < MIN_CANDIDATES) return;
       const champion = me.candidates[Math.floor(Math.random() * me.candidates.length)];
       this.send({ type: "pick", champion });
-    } else if (!me?.champion || (this.usesRoles() && !me.role)) {
+      this.send({ type: "build", build: rollBuild(this.data, this.room.mode, me.role, champion) });
       return;
     }
-    this.send({ type: "build", build: rollBuild(this.data, this.room.mode, me.role) });
+    if (!me?.champion || (this.usesRoles() && !me.role)) return;
+    this.send({ type: "build", build: rollBuild(this.data, this.room.mode, me.role, me.champion) });
   }
 
   allRandom() {
     const taken = (this.room?.players ?? []).filter((p) => p.id !== this.me && p.champion).map((p) => p.champion);
     const role = this.myPlayer()?.role ?? null;
     if (this.usesRoles() && !role) return;
-    this.send({ type: "pick", champion: randomChampion(this.data, taken) });
-    this.send({ type: "build", build: rollBuild(this.data, this.room?.mode, role) });
+    const champion = randomChampion(this.data, taken);
+    this.send({ type: "pick", champion });
+    this.send({ type: "build", build: rollBuild(this.data, this.room?.mode, role, champion) });
   }
 
   reset() {
@@ -459,7 +461,7 @@ class RoomView {
         "div",
         { class: "row" },
         h("div", { class: "icons small" }, build.spells.map((id) => icon(this.data.img.spell(id), this.data.spellsById[id]?.name ?? id))),
-        h("span", { class: "skill-order" }, build.skillOrder.join(" > ")),
+        build.skillOrder && h("span", { class: "skill-order" }, build.skillOrder.join(" > ")),
       ),
       build.augments && [h("div", { class: "section-label" }, "Optimisations"), this.augmentsView(build.augments)],
       build.role === "adc" && h("p", { class: "build-note" }, "ADC : tes bottes passeront dans l'emplacement de quête, d'où un légendaire en plus."),

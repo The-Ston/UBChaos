@@ -12,6 +12,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 - ARAM modes: select 1 to 3 offered champions, the roll picks one.
 - ARAM du Chaos: no runes, augment reroll/pick instructions at levels 1, 7, 11 and 15.
 - Fuzzy champion search with initials and nicknames.
+- Champion-specific skill orders: Udyr includes R, Aphelios gets a bonus stat priority.
 - Per-player clear button; floating champion picker hidden once rolled.
 - Version and build number shown in the header.
 - Footer with signature, hosting and privacy notice, and Riot Games legal notice.
