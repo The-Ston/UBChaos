@@ -36,6 +36,7 @@ export const ROLES = {
   random: "Aléatoire",
 };
 const SUPPORT_QUEST_ITEM = "3867";
+const SMITE = "SummonerSmite";
 // What gets a rolled max order. Udyr can rank R from level 1 like his other
 // abilities; Aphelios spends his points on bonus stats instead of abilities.
 const SKILLS_BY_CHAMPION = {
@@ -43,8 +44,6 @@ const SKILLS_BY_CHAMPION = {
   Aphelios: ["Dégâts d'attaque", "Vitesse d'attaque", "Létalité"],
 };
 const DEFAULT_SKILLS = ["Q", "W", "E"];
-// Champions who cannot buy boots.
-const NO_BOOTS_CHAMPIONS = ["Cassiopeia"];
 
 export async function loadGameData() {
   const versions = await fetch(`${DDRAGON}/api/versions.json`).then((r) => r.json());
@@ -173,23 +172,29 @@ export function rollBuild(data, mode, chosenRole = null, champion = null) {
   const pool = data.pools[mode] ?? data.pools.normal;
   const role = chosenRole === "random" ? pick(Object.keys(ROLES).filter((r) => r !== "random")) : chosenRole;
   const roleItems = pool.roleItems[role] ?? [];
-  const boots = NO_BOOTS_CHAMPIONS.includes(champion) ? [] : [pick(pool.boots)];
   const roleItem = roleItems.length ? [pick(roleItems)] : [];
   // 6 inventory slots shared by boots, the role item (jungle, support) and
   // legendaries. The ADC's boots end up in the quest slot, freeing one.
-  const bootsInInventory = boots.length > 0 && role !== "adc";
-  const legendaryCount = 6 - roleItem.length - (bootsInInventory ? 1 : 0);
-  const items = [...boots, ...roleItem, ...sampleCompatible(pool.legendaries, legendaryCount)];
+  const legendaryCount = 6 - roleItem.length - (role === "adc" ? 0 : 1);
+  const items = [pick(pool.boots), ...roleItem, ...sampleCompatible(pool.legendaries, legendaryCount)];
 
   return {
     role,
-    noBoots: boots.length === 0,
     items: items.map((item) => item.id),
     runes: MODES[mode]?.runes === false ? null : rollRunes(data),
-    spells: sample(pool.spells, 2).map((spell) => spell.id),
+    spells: rollSpells(pool, role),
     skillOrder: rollSkillOrder(champion),
     augments: MODES[mode]?.augments ? rollAugments() : null,
   };
+}
+
+// The jungler always needs Smite (also required for jungle pets); it is
+// useless in lane, so other roles never get it.
+function rollSpells(pool, role) {
+  const others = pool.spells.filter((spell) => spell.id !== SMITE);
+  const hasSmite = pool.spells.some((spell) => spell.id === SMITE);
+  if (role === "jungle" && hasSmite) return [SMITE, pick(others).id];
+  return sample(others, 2).map((spell) => spell.id);
 }
 
 function rollSkillOrder(champion) {

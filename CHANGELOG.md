@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Fixed
+- Cassiopeia gets boots again: she can buy them since patch 26.01.
+- Junglers always get Smite; other roles never do.
+
 ## [1.0.0] - 2026-10-09
 
 ### Added
