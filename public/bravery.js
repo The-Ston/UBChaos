@@ -29,7 +29,7 @@ export const ROLES = {
   top: "Top",
   jungle: "Jungle",
   mid: "Mid",
-  // The ADC ends without boots, so they get one more legendary instead.
+  // The ADC role quest moves boots to the quest slot, freeing room for a 6th legendary.
   adc: "ADC",
   support: "Support",
   // Resolved to one of the roles above at roll time.
@@ -126,10 +126,11 @@ export function rollBuild(data, mode, chosenRole = null) {
   const pool = data.pools[mode] ?? data.pools.normal;
   const role = chosenRole === "random" ? pick(Object.keys(ROLES).filter((r) => r !== "random")) : chosenRole;
   const roleItems = pool.roleItems[role] ?? [];
-  // Always 6 items: the role item (jungle, support) takes a legendary's slot.
+  // 6 slots: the role item (jungle, support) takes a legendary's slot; the ADC
+  // gets boots plus 6 legendaries since their boots end up in the quest slot.
   const items =
     role === "adc"
-      ? sample(pool.legendaries, 6)
+      ? [pick(pool.boots), ...sample(pool.legendaries, 6)]
       : roleItems.length
         ? [pick(pool.boots), pick(roleItems), ...sample(pool.legendaries, 4)]
         : [pick(pool.boots), ...sample(pool.legendaries, 5)];

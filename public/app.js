@@ -462,7 +462,7 @@ class RoomView {
         h("span", { class: "skill-order" }, build.skillOrder.join(" > ")),
       ),
       build.augments && [h("div", { class: "section-label" }, "Optimisations"), this.augmentsView(build.augments)],
-      build.role === "adc" && h("p", { class: "build-note" }, "ADC : pas de bottes, un objet légendaire en plus à la place."),
+      build.role === "adc" && h("p", { class: "build-note" }, "ADC : tes bottes passeront dans l'emplacement de quête, d'où un légendaire en plus."),
     );
   }
 
