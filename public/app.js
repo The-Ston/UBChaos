@@ -489,7 +489,7 @@ fetch("/api/version")
   .then((res) => res.json())
   .then(({ version, build, commit }) => {
     const el = document.getElementById("version");
-    el.textContent = `v${version}`;
+    el.textContent = ` - v${version}`;
     el.title = build === "dev" ? "Build local" : `Build ${build} (${commit})`;
   })
   .catch(() => {});

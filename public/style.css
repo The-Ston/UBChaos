@@ -430,10 +430,7 @@ body.picking main {
 }
 
 .version {
-  margin-left: auto;
-  font-size: 0.75rem;
   font-family: ui-monospace, monospace;
-  color: var(--muted);
 }
 
 .site-footer {
