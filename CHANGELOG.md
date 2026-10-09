@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-09
+
 ### Added
 - Link previews (Discord...): room links show the room code, mode, options, players and host, with a preview image.
 - Copy button on the own card: copies the build as a PNG image to paste in Discord (downloaded where copying images is not supported).
