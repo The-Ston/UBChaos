@@ -6,6 +6,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ### Added
 - The host can kick a player, who cannot rejoin that room.
+- The host can hand the host role to another player; when the host quits, the earliest online player takes it.
 - Normal mode picker: big "Tout aléatoire" button (role, champion and build), then roles, then champions.
 - "Aléatoire" champion tile in every mode: the champion is drawn when generating the build.
 - Card buttons: ↺ regenerates with the same choices, the red bin clears them.
@@ -13,10 +14,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 - Room option at creation: rerolls allowed (0 to 3, or unlimited); out of rerolls, the build is final.
 - Room options folded behind a one-line summary on the home page.
 - Offered builds shown side by side in a window over the page.
+- Locks: each player can lock their build (ready), the host can lock the whole room; "Prêts : x/y" counter.
+- Data Dragon patch shown in the footer.
+
+### Changed
+- Automated tests (roll rules, room rules, browser flows) run before every release deploy.
+- Game data is compacted and cached by the Worker: about 20 KB to download instead of about 1 MB.
+- Random role badge shortened to "🎲 Support".
 
 ### Fixed
 - Cassiopeia gets boots again: she can buy them since patch 26.01.
 - Junglers always get Smite; other roles never do.
+- Melee champions no longer roll Runaan's Hurricane (ranged only; range-switching champions excepted).
+- A room that expired while open sends players home instead of reconnecting forever.
 
 ## [1.0.0] - 2026-10-09
 

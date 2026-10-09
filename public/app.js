@@ -1,4 +1,4 @@
-import { MODES, ROLES, findRune, loadGameData, randomChampion, rollBuild } from "/bravery.js";
+import { MODES, ROLES, findRune, loadGameData, patchName, randomChampion, rollBuild } from "/bravery.js";
 import { searchKeys, searchRank } from "/search.js";
 
 const app = document.getElementById("app");
@@ -193,18 +193,28 @@ function showHome(message = "") {
 
 // ---------- Room ----------
 
-async function showRoom(code) {
+// Whether this player may enter the room: "ok", "offline" (server unreachable),
+// or the message explaining why not.
+async function roomAccess(code) {
   const res = await fetch(`/api/rooms/${code}?playerId=${encodeURIComponent(playerId())}`).catch(() => null);
-  if (!res?.ok) {
-    const { error } = (await res?.json().catch(() => null)) ?? {};
-    const message =
-      error === "Kicked from this room"
-        ? `Tu as été exclu du salon ${code}.`
-        : res?.status === 403
-          ? `Le salon ${code} est complet (10 joueurs max).`
-          : `Le salon ${code} n'existe pas ou a expiré.`;
-    history.replaceState(null, "", "/");
-    showHome(message);
+  if (!res) return "offline";
+  if (res.ok) return "ok";
+  const { error } = (await res.json().catch(() => null)) ?? {};
+  if (error === "Kicked from this room") return `Tu as été exclu du salon ${code}.`;
+  if (res.status === 403) return `Le salon ${code} est complet (10 joueurs max).`;
+  return `Le salon ${code} n'existe pas ou a expiré.`;
+}
+
+function leaveToHome(message) {
+  document.body.classList.remove("picking", "modal-open");
+  history.replaceState(null, "", "/");
+  showHome(message);
+}
+
+async function showRoom(code) {
+  const access = await roomAccess(code);
+  if (access !== "ok") {
+    leaveToHome(access === "offline" ? "Impossible de joindre le serveur." : access);
     return;
   }
 
@@ -256,6 +266,10 @@ class RoomView {
     this.status = h("span", { class: "status muted", hidden: true });
     this.modeLabel = h("span", { class: "mode-badge" });
     this.resetButton = h("button", { class: "secondary", hidden: true, onclick: () => this.reset() }, "Tout réinitialiser");
+    // Host padlock for the whole room, styled like the card padlocks.
+    this.lockAllButton = h("button", { class: "secondary lock-button lock-all", hidden: true, onclick: () => this.send({ type: "lockAll", locked: !this.room?.locked }) });
+    // "Prêts : 2/4" counts locked builds; also says when the host locked the room.
+    this.readyLabel = h("div", { class: "ready-label" });
     this.playersEl = h("div", { class: "players" });
     this.search = h("input", { placeholder: "Rechercher un champion…", oninput: () => this.filterChampions() });
     this.rollButton = h("button", { disabled: true, onclick: () => this.roll() }, "Générer mon build");
@@ -307,11 +321,12 @@ class RoomView {
       h(
         "div",
         { class: "room-header" },
-        h("div", {}, h("div", { class: "section-label" }, "Code du salon"), h("div", { class: "row" }, h("button", { class: "room-code", title: "Copier le code", onclick: (e) => this.copyCode(e.currentTarget) }, h("span", { class: "code-text" }, this.code), h("span", { class: "copied-text" }, "Copié !")), this.modeLabel), this.status),
+        h("div", {}, h("div", { class: "section-label" }, "Code du salon"), h("div", { class: "row" }, h("button", { class: "room-code", title: "Copier le code", onclick: (e) => this.copyCode(e.currentTarget) }, h("span", { class: "code-text" }, this.code), h("span", { class: "copied-text" }, "Copié !")), this.modeLabel), this.readyLabel, this.status),
         h(
           "div",
           { class: "row" },
           h("button", { class: "secondary", onclick: (e) => this.copyLink(e.currentTarget) }, "Copier le lien"),
+          this.lockAllButton,
           this.resetButton,
           h("button", { class: "danger", onclick: () => this.leave() }, "Quitter"),
         ),
@@ -328,9 +343,13 @@ class RoomView {
     if (this.leaving) return;
     this.leaving = true;
     this.socket?.close();
-    document.body.classList.remove("picking", "modal-open");
-    history.replaceState(null, "", "/");
-    showHome(`Tu as été exclu du salon ${this.code}.`);
+    leaveToHome(`Tu as été exclu du salon ${this.code}.`);
+  }
+
+  promote(player) {
+    if (confirm(`Nommer ${player.name} hôte du salon ? Tu perdras ce rôle.`)) {
+      this.send({ type: "promote", playerId: player.id });
+    }
   }
 
   kick(player) {
@@ -366,9 +385,22 @@ class RoomView {
       }
       this.status.textContent = "Déconnecté, reconnexion…";
       this.status.hidden = false;
-      setTimeout(() => this.connect(), this.retryDelay);
+      setTimeout(() => this.reconnect(), this.retryDelay);
       this.retryDelay = Math.min(this.retryDelay * 2, 10000);
     });
+  }
+
+  // Reconnects only if the room still exists and accepts us; an expired room
+  // would otherwise reject the socket forever.
+  async reconnect() {
+    if (this.leaving) return;
+    const access = await roomAccess(this.code);
+    if (access === "ok" || access === "offline") {
+      this.connect();
+      return;
+    }
+    this.leaving = true;
+    leaveToHome(access);
   }
 
   send(message) {
@@ -388,9 +420,11 @@ class RoomView {
     this.send({ type: "role", role: role === current ? null : role });
   }
 
+  // Short enough to fit next to the card buttons: "🎲 Support" for a rolled random role.
   roleLabel(player) {
+    if (player.role !== "random") return ROLES[player.role];
     const rolled = player.build?.role;
-    return player.role === "random" && rolled ? `Aléatoire : ${ROLES[rolled]}` : ROLES[player.role];
+    return `🎲 ${rolled ? ROLES[rolled] : ROLES.random}`;
   }
 
   usesCandidates() {
@@ -417,8 +451,9 @@ class RoomView {
   // drawn champion is stored in the build.
   roll() {
     const me = this.myPlayer();
-    // A first generation is always allowed; later ones need a reroll left.
-    if (me?.generations > 0 && this.rerollsLeft(me) <= 0) return;
+    // A first generation is always allowed; later ones need a reroll left (null: unlimited).
+    const left = this.rerollsLeft(me);
+    if (me?.generations > 0 && left !== null && left <= 0) return;
     if (this.usesCandidates()) {
       if ((me?.candidates.length ?? 0) < MIN_CANDIDATES) return;
       this.sendBuilds(() => this.rollOne(me.role, me.candidates[Math.floor(Math.random() * me.candidates.length)]));
@@ -534,10 +569,18 @@ class RoomView {
       .filter(Boolean)
       .join(" - ");
     this.resetButton.hidden = room.hostId !== this.me;
+    this.lockAllButton.hidden = room.hostId !== this.me;
+    this.lockAllButton.textContent = room.locked ? "🔒" : "🔓";
+    this.lockAllButton.title = room.locked ? "Tout déverrouiller" : "Tout verrouiller";
+    this.lockAllButton.classList.toggle("locked", Boolean(room.locked));
+    const ready = room.players.filter((p) => p.locked && p.build).length;
+    this.readyLabel.textContent = room.locked ? "🔒 Salon verrouillé par l'hôte" : `Prêts : ${ready}/${room.players.length}`;
+    this.readyLabel.classList.toggle("all-ready", room.locked || (ready > 0 && ready === room.players.length));
     const withCandidates = this.usesCandidates();
     const candidates = me?.candidates ?? [];
     // Once rolled, the picker only takes space; the card's clear button brings it back.
-    this.picker.hidden = Boolean(me?.build || me?.options?.length);
+    // Also hidden while the host keeps the room locked: nothing could be generated.
+    this.picker.hidden = Boolean(me?.build || me?.options?.length || room.locked);
     document.body.classList.toggle("picking", !this.picker.hidden);
     this.rolePicker.hidden = !this.usesRoles();
     for (const button of this.roleButtons) {
@@ -591,13 +634,14 @@ class RoomView {
         h(
           "div",
           {},
-          h("div", { class: "row" }, h("span", { class: `dot ${player.online ? "on" : ""}` }), h("span", { class: "name" }, player.name), player.id === hostId && h("span", { title: "Hôte" }, "👑"), this.usesRoles() && player.role && h("span", { class: "role-badge" }, this.roleLabel(player))),
+          h("div", { class: "row" }, h("span", { class: `dot ${player.online ? "on" : ""}` }), h("span", { class: "name" }, player.name), player.id === hostId && h("span", { title: "Hôte" }, "👑"), !isMe && player.locked && h("span", { title: "Build verrouillé : prêt" }, "🔒"), this.usesRoles() && player.role && h("span", { class: "role-badge" }, this.roleLabel(player))),
           h("div", { class: "muted" }, champion ? champion.name : randomPick ? "Champion aléatoire" : this.usesCandidates() ? `${player.candidates.length}/${MAX_CANDIDATES} champions sélectionnés` : "Choisit son champion…"),
         ),
         h(
           "div",
           { class: "card-actions" },
           isMe && generated && this.buildActions(player),
+          !isMe && this.me === hostId && h("button", { class: "secondary icon-button", title: "Nommer hôte", onclick: () => this.promote(player) }, "👑"),
           !isMe && this.me === hostId && h("button", { class: "danger icon-button", title: "Exclure du salon", onclick: () => this.kick(player) }, "✕"),
         ),
       ),
@@ -606,20 +650,37 @@ class RoomView {
         ? this.buildView(player.build)
         : player.options.length
           ? h("p", { class: "muted" }, isMe ? "Choisis ton build dans la fenêtre." : `Choisit parmi ${player.options.length} builds…`)
-          : champion && h("p", { class: "muted" }, "Pas encore de build."),
+          : this.room?.locked
+            ? h("p", { class: "muted" }, "Salon verrouillé par l'hôte.")
+            : champion && h("p", { class: "muted" }, "Pas encore de build."),
     );
   }
 
   // ↺ (regenerate with the same choices) and the bin (clear the choices), for the own card and the options window.
   buildActions(player) {
+    const roomLocked = Boolean(this.room?.locked);
     const remaining = this.rerollsLeft(player);
-    const noReroll = remaining !== null && remaining <= 0;
+    const frozen = roomLocked || player.locked;
+    const noReroll = frozen || (remaining !== null && remaining <= 0);
+    const frozenTitle = roomLocked ? "Salon verrouillé par l'hôte" : player.locked ? "Build verrouillé" : "Plus de reroll : build définitif";
     const rerollTitle = noReroll
-      ? "Plus de reroll : build définitif"
+      ? frozenTitle
       : `Regénérer avec les mêmes choix${remaining === null ? "" : ` (${remaining} reroll${remaining > 1 ? "s" : ""} restant${remaining > 1 ? "s" : ""})`}`;
     return [
+      // Locking needs a kept build, not pending options.
+      player.build &&
+        h(
+          "button",
+          {
+            class: `secondary icon-button lock-button ${player.locked ? "locked" : ""}`,
+            title: roomLocked ? "Salon verrouillé par l'hôte" : player.locked ? "Déverrouiller mon build" : "Verrouiller mon build (je suis prêt)",
+            disabled: roomLocked,
+            onclick: () => this.send({ type: "lock", locked: !player.locked }),
+          },
+          player.locked || roomLocked ? "🔒" : "🔓",
+        ),
       h("button", { class: "secondary icon-button", title: rerollTitle, disabled: noReroll, onclick: () => this.roll() }, remaining === null ? "↺" : `↺ ${remaining}`),
-      h("button", { class: "danger icon-button", title: noReroll ? "Plus de reroll : build définitif" : "Effacer mes choix", disabled: noReroll, onclick: () => this.clearMine() }, "🗑"),
+      h("button", { class: "danger icon-button", title: noReroll ? frozenTitle : "Effacer mes choix", disabled: noReroll, onclick: () => this.clearMine() }, "🗑"),
     ];
   }
 
@@ -746,6 +807,15 @@ fetch("/api/version")
     const el = document.getElementById("version");
     el.textContent = ` - v${version}`;
     el.title = build === "dev" ? "Build local" : `Build ${build} (${commit})`;
+  })
+  .catch(() => {});
+
+// Patch of the Data Dragon data the builds are rolled from.
+gameData
+  .then(({ version }) => {
+    const el = document.getElementById("patch");
+    el.textContent = ` - Patch ${patchName(version)}`;
+    el.title = `Données Data Dragon ${version}`;
   })
   .catch(() => {});
 

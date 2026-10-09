@@ -235,6 +235,16 @@ button.danger {
   gap: 12px;
 }
 
+/* Name and badges shrink first; the card buttons always stay inside the card. */
+.player-head > div:not(.card-actions):not(.portrait) {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-head > .card-actions {
+  flex-shrink: 0;
+}
+
 .player-head .name {
   font-weight: 700;
   overflow-wrap: anywhere;
@@ -783,4 +793,41 @@ body.modal-open {
 .modal .option {
   align-content: start;
   scroll-snap-align: start;
+}
+
+/* "Prêts : 2/4" under the room code; gold when everyone is ready or the room is locked. */
+.ready-label {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.ready-label.all-ready {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.lock-button.locked {
+  border-color: var(--gold);
+  background: #2a2414;
+}
+
+/* Open padlock greyed out, so it reads clearly apart from the gold locked one. */
+.lock-button:not(.locked) {
+  filter: grayscale(1) opacity(0.6);
+}
+
+.lock-button:not(.locked):hover {
+  filter: none;
+}
+
+.role-badge {
+  white-space: nowrap;
+}
+
+/* Header padlock: same height as the text buttons next to it. */
+.lock-all {
+  padding: 10px 9px;
+  font-size: 1rem;
+  line-height: 1;
 }

@@ -6,6 +6,7 @@ Ultimate Bravery rooms for League of Legends, on Cloudflare Workers + Durable Ob
 - `public/`: static vanilla JS client; rolls are computed client-side from Data Dragon.
 - Local dev: `npm run dev`, then open http://127.0.0.1:8787 (not `localhost`: IPv6 fallback adds ~200 ms per request on this machine).
 - Checks: `npm run check` (tsc).
+- Tests: `npm test` (node:test, ~30 s): `test/bravery.test.mjs` roll rules on live Data Dragon, `test/room.test.mjs` room rules over WebSockets, `test/e2e.test.mjs` browser flows with puppeteer-core. Each server-backed file starts its own `wrangler dev` (ports 8791/8792, temp storage); e2e needs a Chromium-based browser (`CHROME_PATH`, auto-detects Chrome/Edge). The release workflow runs them before deploying. Add or update tests with each feature.
 - Production: https://ubchaos.pilalheur.workers.dev (the Cloudflare account's workers.dev subdomain is shared with Pilalheur; do not rename it).
 
 ## Versioning

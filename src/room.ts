@@ -32,6 +32,8 @@ interface Meta {
   buildChoices: number;
   // Rerolls allowed per player; null means unlimited.
   rerollLimit: number | null;
+  // Set by the host: nobody can change their build anymore.
+  locked?: boolean;
   createdAt: number;
 }
 
@@ -48,6 +50,8 @@ interface Player {
   options: unknown[];
   // Builds generated so far (single builds or sets of options); all but the first are rerolls.
   generations: number;
+  // The player marked their build as final.
+  locked?: boolean;
   joinedAt: number;
 }
 
@@ -66,6 +70,9 @@ type ClientMessage =
   | { type: "clear" }
   | { type: "leave" }
   | { type: "kick"; playerId: string }
+  | { type: "promote"; playerId: string }
+  | { type: "lock"; locked: boolean }
+  | { type: "lockAll"; locked: boolean }
   | { type: "reset" };
 
 // Keep in sync with RANDOM_CHAMPION in public/app.js.
@@ -77,7 +84,9 @@ export const KICKED_CLOSE_CODE = 4001;
 // Messages that would roll again or change the choices behind a generated build.
 const LOCKABLE_MESSAGES = new Set<ClientMessage["type"]>(["pick", "candidates", "role", "clear", "build", "options"]);
 
+// A build is frozen when the room or the player locked it, or once the rerolls are used up.
 function isLocked(meta: Meta, player: Player): boolean {
+  if (meta.locked || player.locked) return true;
   const limit = meta.rerollLimit ?? null;
   return limit !== null && (player.generations ?? 0) > limit;
 }
@@ -126,6 +135,11 @@ export class Room extends DurableObject<Env> {
       players.push(player);
     } else {
       player.name = name;
+    }
+    // A room without host (it left with nobody else online) gets the next player to connect.
+    if (!players.some((p) => p.id === meta.hostId)) {
+      meta.hostId = playerId;
+      await this.ctx.storage.put("meta", meta);
     }
     await this.ctx.storage.put("players", players);
     await this.touch();
@@ -214,7 +228,19 @@ export class Room extends DurableObject<Env> {
       case "leave":
         players = players.filter((p) => p.id !== playerId);
         ws.close(1000, "Left the room");
+        if (playerId === meta.hostId) {
+          meta.hostId = this.nextHost(players, ws);
+          await this.ctx.storage.put("meta", meta);
+        }
         break;
+      // Host only: hands the host role to another player.
+      case "promote": {
+        const target = message.playerId;
+        if (playerId !== meta.hostId || target === playerId || !players.some((p) => p.id === target)) return;
+        meta.hostId = target;
+        await this.ctx.storage.put("meta", meta);
+        break;
+      }
       // Only ever affects the sender, so nobody can clear someone else's build.
       case "clear":
         player.champion = null;
@@ -238,6 +264,17 @@ export class Room extends DurableObject<Env> {
         }
         break;
       }
+      // The player marks their build as final ("ready"); undone unless the host locked the room.
+      case "lock":
+        if (typeof message.locked !== "boolean" || meta.locked || (message.locked && !player.build)) return;
+        player.locked = message.locked;
+        break;
+      // Host only: freezes or unfreezes every build in the room.
+      case "lockAll":
+        if (playerId !== meta.hostId || typeof message.locked !== "boolean") return;
+        meta.locked = message.locked;
+        await this.ctx.storage.put("meta", meta);
+        break;
       case "reset":
         if (playerId !== meta.hostId) return;
         for (const p of players) {
@@ -246,7 +283,10 @@ export class Room extends DurableObject<Env> {
           p.build = null;
           p.options = [];
           p.generations = 0;
+          p.locked = false;
         }
+        meta.locked = false;
+        await this.ctx.storage.put("meta", meta);
         break;
       default:
         return;
@@ -279,6 +319,19 @@ export class Room extends DurableObject<Env> {
     await this.ctx.storage.deleteAll();
   }
 
+  // Earliest arrival among the players still connected. With nobody online the room
+  // stays without host, and the next player to connect takes the role.
+  private nextHost(players: Player[], leaving: WebSocket): string {
+    const online = new Set(
+      this.ctx
+        .getWebSockets()
+        .filter((socket) => socket !== leaving)
+        .map((socket) => (socket.deserializeAttachment() as Attachment).playerId),
+    );
+    const byArrival = [...players].sort((a, b) => a.joinedAt - b.joinedAt);
+    return byArrival.find((p) => online.has(p.id))?.id ?? "";
+  }
+
   private async kicked(): Promise<string[]> {
     return (await this.ctx.storage.get<string[]>("kicked")) ?? [];
   }
@@ -297,11 +350,11 @@ export class Room extends DurableObject<Env> {
     if (!meta) return;
     const sockets = this.ctx.getWebSockets().filter((ws) => ws !== closing);
     const online = new Set(sockets.map((ws) => (ws.deserializeAttachment() as Attachment).playerId));
-    const players = (await this.players()).map((p) => ({ ...p, candidates: p.candidates ?? [], role: p.role ?? null, options: p.options ?? [], generations: p.generations ?? 0, online: online.has(p.id) }));
+    const players = (await this.players()).map((p) => ({ ...p, candidates: p.candidates ?? [], role: p.role ?? null, options: p.options ?? [], generations: p.generations ?? 0, locked: p.locked ?? false, online: online.has(p.id) }));
 
     const payload = JSON.stringify({
       type: "state",
-      room: { code: meta.code, hostId: meta.hostId, mode: meta.mode ?? "normal", buildChoices: meta.buildChoices ?? 1, rerollLimit: meta.rerollLimit ?? null, players },
+      room: { code: meta.code, hostId: meta.hostId, mode: meta.mode ?? "normal", buildChoices: meta.buildChoices ?? 1, rerollLimit: meta.rerollLimit ?? null, locked: meta.locked ?? false, players },
     });
     for (const ws of sockets) {
       try {

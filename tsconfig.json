@@ -8,7 +8,9 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    // The Worker imports the Data Dragon helpers from the client module.
+    "allowJs": true
   },
   "include": ["src", "worker-configuration.d.ts"]
 }

@@ -1,5 +1,6 @@
-// Data Dragon loading and Ultimate Bravery rolls. Everything runs client-side;
-// builds only store ids, so every client renders them from its own copy.
+// Data Dragon loading and Ultimate Bravery rolls. Rolls run client-side; builds
+// only store ids, so every client renders them from its own copy. The Worker
+// imports the fetch/compact helpers to serve /api/gamedata.
 
 const DDRAGON = "https://ddragon.leagueoflegends.com";
 const LOCALE = "fr_FR";
@@ -37,6 +38,11 @@ export const ROLES = {
 };
 const SUPPORT_QUEST_ITEM = "3867";
 const SMITE = "SummonerSmite";
+// Items only ranged champions can buy (Runaan's Hurricane), and champions that
+// switch range type and may buy them anyway.
+const RANGED_ONLY_ITEMS = ["3085"];
+const RANGE_SWITCHERS = ["Elise", "Gnar", "Jayce", "Kayle", "Nidalee"];
+const MELEE_MAX_RANGE = 250;
 // What gets a rolled max order. Udyr can rank R from level 1 like his other
 // abilities; Aphelios spends his points on bonus stats instead of abilities.
 const SKILLS_BY_CHAMPION = {
@@ -45,24 +51,65 @@ const SKILLS_BY_CHAMPION = {
 };
 const DEFAULT_SKILLS = ["Q", "W", "E"];
 
+// The page loads the compact data served (and cached) by the Worker.
 export async function loadGameData() {
+  const res = await fetch("/api/gamedata");
+  if (!res.ok) throw new Error(`Game data unavailable (${res.status})`);
+  return buildGameData(await res.json());
+}
+
+// Latest Data Dragon files, as published by Riot (about 1 MB).
+export async function fetchDataDragon() {
   const versions = await fetch(`${DDRAGON}/api/versions.json`).then((r) => r.json());
   const version = versions[0];
   const base = `${DDRAGON}/cdn/${version}/data/${LOCALE}`;
   const [champions, items, runes, summoners] = await Promise.all(
-    ["champion", "item", "runesReforged", "summoner"].map((file) =>
-      fetch(`${base}/${file}.json`).then((r) => r.json()),
-    ),
+    ["champion", "item", "runesReforged", "summoner"].map((file) => fetch(`${base}/${file}.json`).then((r) => r.json())),
   );
+  return { version, champions: champions.data, items: items.data, runes, summoners: summoners.data };
+}
 
-  const championList = Object.values(champions.data).sort((a, b) => a.name.localeCompare(b.name, LOCALE.replace("_", "-")));
-  const shopItems = Object.entries(items.data)
+// Keeps only what rolls and rendering use, so the page downloads a fraction of Data Dragon.
+export function compactGameData({ version, champions, items, runes, summoners }) {
+  const pickFields = (object, fields) => Object.fromEntries(fields.filter((field) => object[field] !== undefined).map((field) => [field, object[field]]));
+  return {
+    version,
+    champions: Object.fromEntries(
+      Object.entries(champions).map(([id, c]) => [id, { id, name: c.name, image: { full: c.image.full }, stats: { attackrange: c.stats.attackrange } }]),
+    ),
+    items: Object.fromEntries(
+      Object.entries(items)
+        // Ids above 10000 are mode-specific copies (Arena, ARAM...).
+        .filter(([id]) => Number(id) < 10000)
+        .map(([id, item]) => [
+          id,
+          {
+            ...pickFields(item, ["name", "inStore", "tags", "maps", "from", "into", "requiredChampion", "requiredAlly", "hideFromAll"]),
+            gold: { total: item.gold?.total, purchasable: item.gold?.purchasable },
+            passives: passiveNames(item.description ?? ""),
+          },
+        ]),
+    ),
+    runes: runes.map((tree) => ({
+      id: tree.id,
+      name: tree.name,
+      icon: tree.icon,
+      slots: tree.slots.map((slot) => ({ runes: slot.runes.map((rune) => ({ id: rune.id, name: rune.name, icon: rune.icon })) })),
+    })),
+    summoners: Object.fromEntries(
+      Object.entries(summoners).map(([id, spell]) => [id, { id: spell.id, name: spell.name, modes: spell.modes, image: { full: spell.image.full } }]),
+    ),
+  };
+}
+
+// Builds the per-mode pools and image helpers from compact data.
+export function buildGameData({ version, champions, items, runes, summoners }) {
+  const championList = Object.values(champions).sort((a, b) => a.name.localeCompare(b.name, LOCALE.replace("_", "-")));
+  const shopItems = Object.entries(items)
     .map(([id, item]) => ({ ...item, id }))
-    // Ids above 10000 are mode-specific copies (Arena, ARAM...).
-    .filter((item) => Number(item.id) < 10000)
     .filter((item) => item.gold?.purchasable && item.inStore !== false)
     .filter((item) => !item.requiredChampion && !item.requiredAlly && !item.hideFromAll);
-  const allSpells = Object.values(summoners.data);
+  const allSpells = Object.values(summoners);
 
   const pools = Object.fromEntries(
     Object.entries(MODES).map(([mode, { map, spellMode }]) => {
@@ -91,38 +138,41 @@ export async function loadGameData() {
   return {
     version,
     champions: championList,
-    championsById: champions.data,
-    items: items.data,
+    championsById: champions,
+    items,
     pools,
     runeTrees: runes,
-    spellsById: summoners.data,
+    spellsById: summoners,
     img: {
-      champion: (id) => `${DDRAGON}/cdn/${version}/img/champion/${champions.data[id]?.image.full}`,
+      champion: (id) => `${DDRAGON}/cdn/${version}/img/champion/${champions[id]?.image.full}`,
       item: (id) => `${DDRAGON}/cdn/${version}/img/item/${id}.png`,
-      spell: (id) => `${DDRAGON}/cdn/${version}/img/spell/${summoners.data[id]?.image.full}`,
+      spell: (id) => `${DDRAGON}/cdn/${version}/img/spell/${summoners[id]?.image.full}`,
       rune: (icon) => `${DDRAGON}/cdn/img/${icon}`,
     },
   };
 }
+
+// "16.20.1" -> "16.20", the patch name players know.
+export const patchName = (version) => version.split(".").slice(0, 2).join(".");
 
 // Items in the same group cannot be owned together. Unique passives sharing a
 // name form a group (Hydras, Lifeline, Spellblade...); some groups only share
 // a component: Last Whisper and Blighting Jewel.
 const EXCLUSIVE_COMPONENTS = ["3035", "4630"];
 
-function passiveNames(item) {
-  return [...new Set([...item.description.matchAll(/<passive>([^<]+)<\/passive>/g)].map((match) => match[1].trim()))];
+function passiveNames(description) {
+  return [...new Set([...description.matchAll(/<passive>([^<]+)<\/passive>/g)].map((match) => match[1].trim()))];
 }
 
 function withExclusiveGroups(items) {
   const counts = new Map();
   for (const item of items) {
-    for (const name of passiveNames(item)) counts.set(name, (counts.get(name) ?? 0) + 1);
+    for (const name of item.passives) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return items.map((item) => ({
     ...item,
     groups: [
-      ...passiveNames(item).filter((name) => counts.get(name) > 1),
+      ...item.passives.filter((name) => counts.get(name) > 1),
       ...EXCLUSIVE_COMPONENTS.filter((id) => item.from?.includes(id)).map((id) => `from:${id}`),
     ],
   }));
@@ -176,7 +226,8 @@ export function rollBuild(data, mode, chosenRole = null, champion = null) {
   // 6 inventory slots shared by boots, the role item (jungle, support) and
   // legendaries. The ADC's boots end up in the quest slot, freeing one.
   const legendaryCount = 6 - roleItem.length - (role === "adc" ? 0 : 1);
-  const items = [pick(pool.boots), ...roleItem, ...sampleCompatible(pool.legendaries, legendaryCount)];
+  const legendaries = pool.legendaries.filter((item) => canBuy(data, champion, item.id));
+  const items = [pick(pool.boots), ...roleItem, ...sampleCompatible(legendaries, legendaryCount)];
 
   return {
     role,
@@ -188,6 +239,14 @@ export function rollBuild(data, mode, chosenRole = null, champion = null) {
     skillOrder: rollSkillOrder(champion),
     augments: MODES[mode]?.augments ? rollAugments() : null,
   };
+}
+
+// Whether the champion's range type allows buying the item. Melee champions
+// top out at 225 range and ranged ones start at 300.
+function canBuy(data, champion, itemId) {
+  if (!RANGED_ONLY_ITEMS.includes(itemId) || !champion || RANGE_SWITCHERS.includes(champion)) return true;
+  const range = data.championsById[champion]?.stats?.attackrange;
+  return range === undefined || range > MELEE_MAX_RANGE;
 }
 
 // The jungler always needs Smite (also required for jungle pets); it is

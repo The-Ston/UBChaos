@@ -1,4 +1,5 @@
 import pkg from "../package.json";
+import { compactGameData, fetchDataDragon } from "../public/bravery.js";
 import { CODE_RE, MAX_BUILD_CHOICES, MAX_REROLL_LIMIT, ROOM_MODES, Room, type RoomMode } from "./room";
 
 export { Room };
@@ -10,6 +11,26 @@ const PLAYER_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 function randomCode(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+}
+
+// Compact Data Dragon copy, kept for an hour per isolate: a new patch shows up
+// within the hour, and visitors never wait on Riot's 1 MB of files.
+const GAME_DATA_TTL_MS = 60 * 60 * 1000;
+let gameDataCache: { body: string; expires: number } | undefined;
+
+async function gameData(): Promise<Response> {
+  if (!gameDataCache || gameDataCache.expires < Date.now()) {
+    try {
+      const body = JSON.stringify(compactGameData(await fetchDataDragon()));
+      gameDataCache = { body, expires: Date.now() + GAME_DATA_TTL_MS };
+    } catch {
+      // Riot unreachable: keep serving the previous copy if there is one.
+      if (!gameDataCache) return error(502, "Data Dragon unavailable");
+    }
+  }
+  return new Response(gameDataCache!.body, {
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=3600" },
+  });
 }
 
 function error(status: number, message: string): Response {
@@ -48,6 +69,10 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/gamedata") {
+      return gameData();
+    }
 
     if (url.pathname === "/api/version") {
       return Response.json({ version: pkg.version, build: env.BUILD_NUMBER, commit: env.COMMIT_SHA });
