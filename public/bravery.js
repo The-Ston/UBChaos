@@ -3,8 +3,39 @@
 
 const DDRAGON = "https://ddragon.leagueoflegends.com";
 const LOCALE = "fr_FR";
-const SUMMONERS_RIFT = "11";
 const LEGENDARY_MIN_GOLD = 2000;
+// ARAM: Mayhem offers 3 augments at each of these levels; each card can be rerolled once.
+export const AUGMENT_LEVELS = [1, 7, 11, 15];
+const AUGMENT_CHOICES = 3;
+
+// Keep in sync with ROOM_MODES in src/room.ts.
+export const MODES = {
+  normal: {
+    label: "Normal",
+    map: "11",
+    spellMode: "CLASSIC",
+    runes: true,
+    candidates: false,
+    augments: false,
+    roles: true,
+  },
+  aram: { label: "ARAM", map: "12", spellMode: "ARAM", runes: true, candidates: true, augments: false, roles: false },
+  // "KIWI" is Riot's internal name for ARAM: Mayhem.
+  "aram-chaos": { label: "ARAM du Chaos", map: "12", spellMode: "KIWI", runes: false, candidates: true, augments: true, roles: false },
+};
+
+// Keep in sync with ROLES in src/room.ts.
+export const ROLES = {
+  top: "Top",
+  jungle: "Jungle",
+  mid: "Mid",
+  // The ADC ends without boots, so they get one more legendary instead.
+  adc: "ADC",
+  support: "Support",
+  // Resolved to one of the roles above at roll time.
+  random: "Aléatoire",
+};
+const SUPPORT_QUEST_ITEM = "3867";
 
 export async function loadGameData() {
   const versions = await fetch(`${DDRAGON}/api/versions.json`).then((r) => r.json());
@@ -21,30 +52,40 @@ export async function loadGameData() {
     .map(([id, item]) => ({ ...item, id }))
     // Ids above 10000 are mode-specific copies (Arena, ARAM...).
     .filter((item) => Number(item.id) < 10000)
-    .filter((item) => item.maps?.[SUMMONERS_RIFT] && item.gold?.purchasable && item.inStore !== false)
+    .filter((item) => item.gold?.purchasable && item.inStore !== false)
     .filter((item) => !item.requiredChampion && !item.requiredAlly && !item.hideFromAll);
+  const allSpells = Object.values(summoners.data);
 
-  const boots = shopItems.filter((item) => item.tags?.includes("Boots") && item.from?.includes("1001"));
-  const legendaries = uniqueByName(
-    shopItems.filter(
-      (item) =>
-        !item.tags?.some((tag) => tag === "Boots" || tag === "Consumable" || tag === "Trinket") &&
-        !item.into?.length &&
-        item.gold.total >= LEGENDARY_MIN_GOLD,
-    ),
+  const pools = Object.fromEntries(
+    Object.entries(MODES).map(([mode, { map, spellMode }]) => {
+      const onMap = shopItems.filter((item) => item.maps?.[map]);
+      const boots = onMap.filter((item) => item.tags?.includes("Boots") && item.from?.includes("1001"));
+      const legendaries = uniqueByName(
+        onMap.filter(
+          (item) =>
+            !item.tags?.some((tag) => tag === "Boots" || tag === "Consumable" || tag === "Trinket") &&
+            !item.into?.length &&
+            item.gold.total >= LEGENDARY_MIN_GOLD,
+        ),
+      );
+      const spells = allSpells.filter((spell) => spell.modes.includes(spellMode));
+      // Starter role items: jungle pets and the final upgrades of the support quest item.
+      const roleItems = {
+        jungle: uniqueByName(onMap.filter((item) => item.tags?.includes("Jungle") && !item.tags.includes("Consumable") && !item.tags.includes("Trinket"))),
+        support: onMap.filter((item) => item.from?.includes(SUPPORT_QUEST_ITEM)),
+      };
+      return [mode, { boots, legendaries, spells, roleItems }];
+    }),
   );
-  const spells = Object.values(summoners.data).filter((spell) => spell.modes.includes("CLASSIC"));
 
   return {
     version,
     champions: championList,
     championsById: champions.data,
     items: items.data,
-    boots,
-    legendaries,
+    pools,
     runeTrees: runes,
-    spells,
-    spellsById: Object.fromEntries(spells.map((spell) => [spell.id, spell])),
+    spellsById: summoners.data,
     img: {
       champion: (id) => `${DDRAGON}/cdn/${version}/img/champion/${champions.data[id]?.image.full}`,
       item: (id) => `${DDRAGON}/cdn/${version}/img/item/${id}.png`,
@@ -81,21 +122,48 @@ export function randomChampion(data, exclude = []) {
   return pick(pool.length ? pool : data.champions).id;
 }
 
-export function rollBuild(data) {
+export function rollBuild(data, mode, chosenRole = null) {
+  const pool = data.pools[mode] ?? data.pools.normal;
+  const role = chosenRole === "random" ? pick(Object.keys(ROLES).filter((r) => r !== "random")) : chosenRole;
+  const roleItems = pool.roleItems[role] ?? [];
+  // Always 6 items: the role item (jungle, support) takes a legendary's slot.
+  const items =
+    role === "adc"
+      ? sample(pool.legendaries, 6)
+      : roleItems.length
+        ? [pick(pool.boots), pick(roleItems), ...sample(pool.legendaries, 4)]
+        : [pick(pool.boots), ...sample(pool.legendaries, 5)];
+
+  return {
+    role,
+    items: items.map((item) => item.id),
+    runes: MODES[mode]?.runes === false ? null : rollRunes(data),
+    spells: sample(pool.spells, 2).map((spell) => spell.id),
+    skillOrder: shuffle(["Q", "W", "E"]),
+    augments: MODES[mode]?.augments ? rollAugments() : null,
+  };
+}
+
+// Augments are not in Data Dragon, so the roll only says which card positions
+// to reroll and which one to take afterwards.
+function rollAugments() {
+  const positions = Array.from({ length: AUGMENT_CHOICES }, (_, i) => i + 1);
+  return AUGMENT_LEVELS.map((level) => ({
+    level,
+    reroll: positions.filter(() => Math.random() < 0.5),
+    pick: pick(positions),
+  }));
+}
+
+function rollRunes(data) {
   const [primaryTree, secondaryTree] = sample(data.runeTrees, 2);
   const [keystoneSlot, ...primarySlots] = primaryTree.slots;
   const secondarySlots = sample(secondaryTree.slots.slice(1), 2);
-
   return {
-    items: [pick(data.boots).id, ...sample(data.legendaries, 5).map((item) => item.id)],
-    runes: {
-      primaryTree: primaryTree.id,
-      primary: [pick(keystoneSlot.runes).id, ...primarySlots.map((slot) => pick(slot.runes).id)],
-      secondaryTree: secondaryTree.id,
-      secondary: secondarySlots.map((slot) => pick(slot.runes).id),
-    },
-    spells: sample(data.spells, 2).map((spell) => spell.id),
-    skillOrder: shuffle(["Q", "W", "E"]),
+    primaryTree: primaryTree.id,
+    primary: [pick(keystoneSlot.runes).id, ...primarySlots.map((slot) => pick(slot.runes).id)],
+    secondaryTree: secondaryTree.id,
+    secondary: secondarySlots.map((slot) => pick(slot.runes).id),
   };
 }
 

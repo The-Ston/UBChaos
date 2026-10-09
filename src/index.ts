@@ -1,4 +1,4 @@
-import { CODE_RE, Room } from "./room";
+import { CODE_RE, ROOM_MODES, Room, type RoomMode } from "./room";
 
 export { Room };
 
@@ -16,14 +16,19 @@ function error(status: number, message: string): Response {
 }
 
 async function createRoom(request: Request, env: Env): Promise<Response> {
-  const body = await request.json<{ playerId?: unknown }>().catch(() => ({}) as { playerId?: unknown });
+  type Body = { playerId?: unknown; mode?: unknown };
+  const body = await request.json<Body>().catch(() => ({}) as Body);
   if (typeof body.playerId !== "string" || !PLAYER_ID_RE.test(body.playerId)) {
     return error(400, "Invalid player id");
   }
+  if (!ROOM_MODES.includes(body.mode as RoomMode)) {
+    return error(400, "Invalid mode");
+  }
+  const mode = body.mode as RoomMode;
   // Codes are short, so retry on the rare collision with a live room.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomCode();
-    if (await env.ROOMS.getByName(code).create(code, body.playerId)) {
+    if (await env.ROOMS.getByName(code).create(code, body.playerId, mode)) {
       return Response.json({ code });
     }
   }

@@ -16,6 +16,11 @@
   box-sizing: border-box;
 }
 
+/* Classes that set display (grid, flex) would otherwise override the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -258,17 +263,32 @@ button.danger {
   margin-bottom: 4px;
 }
 
+/* Floating window over the cards, so cards growing never push it around. */
 .picker {
-  margin-top: 20px;
-  display: grid;
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: min(1068px, calc(100% - 32px));
+  max-height: 55vh;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Leave room below the cards so the window never hides the last one. */
+body.picking main {
+  padding-bottom: calc(55vh + 32px);
 }
 
 .champion-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   gap: 8px;
-  max-height: 360px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -297,4 +317,114 @@ button.danger {
 
 .champion-grid button.taken img {
   filter: grayscale(1);
+}
+
+.create {
+  display: grid;
+  gap: 12px;
+}
+
+.mode-toggle > button {
+  flex: 1;
+}
+
+.mode-toggle > button[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+  background: #2a2414;
+}
+
+.mode-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.augments {
+  display: grid;
+  gap: 6px;
+}
+
+.augment-row {
+  display: grid;
+  grid-template-columns: 52px auto 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.augment-level {
+  font-weight: 700;
+  color: var(--gold-bright);
+}
+
+.augment-row .row {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.augment-card {
+  min-width: 34px;
+  padding: 3px 6px;
+  text-align: center;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+.augment-card.reroll {
+  color: var(--blue);
+}
+
+.augment-card.pick {
+  border-color: var(--gold);
+  background: #2a2414;
+  color: var(--gold-bright);
+  font-weight: 700;
+}
+
+.build-note {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--gold);
+  background: var(--panel-2);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.role-toggle > button {
+  flex: 1;
+  padding: 8px 10px;
+}
+
+.role-toggle > button[aria-pressed="true"],
+.mode-toggle > button[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+  background: #2a2414;
+}
+
+.role-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--gold);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.player-head .icon-button {
+  margin-left: auto;
+  align-self: flex-start;
+  padding: 4px 10px;
+  font-size: 1rem;
 }
