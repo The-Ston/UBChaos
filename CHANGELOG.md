@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Added
+- Link previews (Discord...): room links show the room code, mode, options, players and host, with a preview image.
+
 ## [1.1.0] - 2026-10-09
 
 ### Added

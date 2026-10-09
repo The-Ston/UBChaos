@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    width: 1200px; height: 630px; overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #1a2533 0%, #0a0e14 65%);
+    font-family: "Segoe UI", system-ui, sans-serif; color: #e6e2d6;
+    display: grid; place-items: center;
+  }
+  .frame {
+    width: 1100px; height: 530px; border: 2px solid #c8aa6e; border-radius: 18px;
+    display: grid; place-content: center; justify-items: center; gap: 28px;
+    box-shadow: inset 0 0 120px rgba(200, 170, 110, 0.12);
+  }
+  .logo { font-size: 150px; font-weight: 900; letter-spacing: 6px; color: #f0e6d2; line-height: 1; }
+  .logo span { color: #c8aa6e; }
+  .tagline { font-size: 46px; color: #c8aa6e; font-weight: 600; letter-spacing: 1px; }
+  .chips { display: flex; gap: 18px; }
+  .chip { font-size: 30px; padding: 8px 26px; border: 2px solid #2a3a4d; border-radius: 999px; color: #8a94a3; }
+  .dice { font-size: 60px; }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="logo">UB<span>Chaos</span></div>
+    <div class="tagline">Ultimate Bravery entre amis</div>
+    <div class="chips"><span class="chip">Normal</span><span class="chip">ARAM</span><span class="chip">ARAM du Chaos</span></div>
+  </div>
+</body>
+</html>

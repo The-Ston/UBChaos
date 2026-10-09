@@ -33,6 +33,44 @@ describe("room creation", () => {
   });
 });
 
+describe("link previews", () => {
+  const meta = (html, property) => html.match(new RegExp(`<meta property="${property}" content="([^"]*)"`))?.[1];
+
+  it("describes the room for Discord-like crawlers", async () => {
+    const host = newId("host");
+    const { code } = await createRoom(base, { playerId: host, mode: "aram-chaos", buildChoices: 3, rerollLimit: 1 });
+    const socket = await connect(base, code, host, "Nico");
+    await wait(200);
+    const html = await fetch(`${base}/r/${code}`).then((r) => r.text());
+    assert.equal(meta(html, "og:title"), `Salon ${code} - UBChaos`);
+    assert.equal(meta(html, "og:description"), "ARAM du Chaos - 3 builds au choix - 1 reroll - 1/10 joueurs - Hôte : Nico. Rejoins le salon pour tirer ton build !");
+    assert.equal(meta(html, "og:url"), `${base}/r/${code}`);
+    assert.equal(meta(html, "og:image"), `${base}/og-image.png`);
+    assert.ok(html.includes('src="/app.js"'), "still the app page");
+    socket.close();
+  });
+
+  it("says when the room does not exist", async () => {
+    const html = await fetch(`${base}/r/ZZZZZ`).then((r) => r.text());
+    assert.equal(meta(html, "og:description"), "Ce salon n'existe pas ou a expiré.");
+  });
+
+  it("escapes player names in the tags", async () => {
+    const host = newId("host");
+    const { code } = await createRoom(base, { playerId: host, mode: "normal" });
+    const socket = await connect(base, code, host, encodeURIComponent('A"><b>x'));
+    await wait(200);
+    const html = await fetch(`${base}/r/${code}`).then((r) => r.text());
+    assert.match(meta(html, "og:description"), /Hôte : A&quot;/);
+    socket.close();
+  });
+
+  it("serves the preview image", async () => {
+    const res = await fetch(`${base}/og-image.png`);
+    assert.equal(res.headers.get("content-type"), "image/png");
+  });
+});
+
 describe("players", () => {
   it("refuses an 11th player but lets members come back", async () => {
     const ids = Array.from({ length: 10 }, () => newId());

@@ -13,7 +13,7 @@ const CHAMPION_RE = /^[A-Za-z0-9]{1,32}$/;
 const MAX_NAME_LENGTH = 24;
 const MAX_MESSAGE_BYTES = 32 * 1024;
 const MAX_BUILD_BYTES = 4 * 1024;
-const MAX_PLAYERS = 10;
+export const MAX_PLAYERS = 10;
 // How many builds a player may be offered to choose from.
 export const MAX_BUILD_CHOICES = 5;
 export const MAX_REROLL_LIMIT = 10;
@@ -104,6 +104,20 @@ export class Room extends DurableObject<Env> {
     await this.ctx.storage.put<Player[]>("players", []);
     await this.touch();
     return true;
+  }
+
+  // Public details for link previews, or null when the room does not exist.
+  async summary(): Promise<{ mode: RoomMode; buildChoices: number; rerollLimit: number | null; players: number; hostName: string | null } | null> {
+    const meta = await this.ctx.storage.get<Meta>("meta");
+    if (!meta) return null;
+    const players = await this.players();
+    return {
+      mode: meta.mode ?? "normal",
+      buildChoices: meta.buildChoices ?? 1,
+      rerollLimit: meta.rerollLimit ?? null,
+      players: players.length,
+      hostName: players.find((p) => p.id === meta.hostId)?.name ?? null,
+    };
   }
 
   // Whether this player may enter: players already in the room can always come back.
