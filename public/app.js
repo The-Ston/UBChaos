@@ -4,6 +4,8 @@ import { searchKeys, searchRank } from "/search.js";
 const app = document.getElementById("app");
 const gameData = loadGameData();
 const MIN_CANDIDATES = 1;
+// Keep in sync with KICKED_CLOSE_CODE in src/room.ts.
+const KICKED_CLOSE_CODE = 4001;
 const MAX_CANDIDATES = 3;
 
 const storage = {
@@ -131,8 +133,15 @@ function showHome(message = "") {
 async function showRoom(code) {
   const res = await fetch(`/api/rooms/${code}?playerId=${encodeURIComponent(playerId())}`).catch(() => null);
   if (!res?.ok) {
+    const { error } = (await res?.json().catch(() => null)) ?? {};
+    const message =
+      error === "Kicked from this room"
+        ? `Tu as été exclu du salon ${code}.`
+        : res?.status === 403
+          ? `Le salon ${code} est complet (10 joueurs max).`
+          : `Le salon ${code} n'existe pas ou a expiré.`;
     history.replaceState(null, "", "/");
-    showHome(res?.status === 403 ? `Le salon ${code} est complet (10 joueurs max).` : `Le salon ${code} n'existe pas ou a expiré.`);
+    showHome(message);
     return;
   }
 
@@ -233,6 +242,21 @@ class RoomView {
     this.connect();
   }
 
+  kicked() {
+    if (this.leaving) return;
+    this.leaving = true;
+    this.socket?.close();
+    document.body.classList.remove("picking");
+    history.replaceState(null, "", "/");
+    showHome(`Tu as été exclu du salon ${this.code}.`);
+  }
+
+  kick(player) {
+    if (confirm(`Exclure ${player.name} du salon ? Il ne pourra plus revenir.`)) {
+      this.send({ type: "kick", playerId: player.id });
+    }
+  }
+
   clearMine() {
     if (confirm("Effacer ton build et recommencer depuis le début ?")) this.send({ type: "clear" });
   }
@@ -250,9 +274,14 @@ class RoomView {
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
       if (message.type === "state") this.render(message.room);
+      else if (message.type === "kicked") this.kicked();
     });
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", (event) => {
       if (this.leaving) return;
+      if (event.code === KICKED_CLOSE_CODE) {
+        this.kicked();
+        return;
+      }
       this.status.textContent = "Déconnecté, reconnexion…";
       this.status.hidden = false;
       setTimeout(() => this.connect(), this.retryDelay);
@@ -425,6 +454,7 @@ class RoomView {
           h("div", { class: "muted" }, champion ? champion.name : this.usesCandidates() ? `${player.candidates.length}/${MAX_CANDIDATES} champions sélectionnés` : "Choisit son champion…"),
         ),
         isMe && player.build && h("button", { class: "secondary icon-button", title: "Effacer et recommencer", onclick: () => this.clearMine() }, "↺"),
+        !isMe && this.me === hostId && h("button", { class: "danger icon-button", title: "Exclure du salon", onclick: () => this.kick(player) }, "✕"),
       ),
       this.usesCandidates() && player.candidates.length > 0 && this.candidatesView(player),
       player.build ? this.buildView(player.build) : champion && h("p", { class: "muted" }, "Pas encore de build."),

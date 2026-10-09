@@ -59,6 +59,7 @@ export default {
         const status = await room.joinStatus(url.searchParams.get("playerId") ?? "");
         if (status === "missing") return error(404, "Room not found");
         if (status === "full") return error(403, "Room is full");
+        if (status === "kicked") return error(403, "Kicked from this room");
         return Response.json({ code });
       }
       if (request.headers.get("Upgrade") !== "websocket") {

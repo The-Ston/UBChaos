@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Added
+- The host can kick a player, who cannot rejoin that room.
+
 ### Fixed
 - Cassiopeia gets boots again: she can buy them since patch 26.01.
 - Junglers always get Smite; other roles never do.

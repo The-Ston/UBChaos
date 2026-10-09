@@ -52,7 +52,11 @@ type ClientMessage =
   | { type: "rename"; name: string }
   | { type: "clear" }
   | { type: "leave" }
+  | { type: "kick"; playerId: string }
   | { type: "reset" };
+
+// WebSocket close code telling a client it was kicked by the host.
+export const KICKED_CLOSE_CODE = 4001;
 
 function cleanName(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -70,8 +74,9 @@ export class Room extends DurableObject<Env> {
   }
 
   // Whether this player may enter: players already in the room can always come back.
-  async joinStatus(playerId: string): Promise<"ok" | "full" | "missing"> {
+  async joinStatus(playerId: string): Promise<"ok" | "full" | "missing" | "kicked"> {
     if (!(await this.ctx.storage.get<Meta>("meta"))) return "missing";
+    if ((await this.kicked()).includes(playerId)) return "kicked";
     const players = await this.players();
     if (players.some((p) => p.id === playerId)) return "ok";
     return players.length >= MAX_PLAYERS ? "full" : "ok";
@@ -88,6 +93,7 @@ export class Room extends DurableObject<Env> {
       return new Response("Invalid player", { status: 400 });
     }
 
+    if ((await this.kicked()).includes(playerId)) return new Response("Kicked from this room", { status: 403 });
     const players = await this.players();
     let player = players.find((p) => p.id === playerId);
     if (!player) {
@@ -168,6 +174,21 @@ export class Room extends DurableObject<Env> {
         player.role = null;
         player.build = null;
         break;
+      // Host only. The kicked player stays banned from this room for its lifetime.
+      case "kick": {
+        const target = message.playerId;
+        if (playerId !== meta.hostId || target === meta.hostId || !players.some((p) => p.id === target)) return;
+        players = players.filter((p) => p.id !== target);
+        await this.ctx.storage.put("kicked", [...(await this.kicked()), target]);
+        for (const socket of this.ctx.getWebSockets()) {
+          if ((socket.deserializeAttachment() as Attachment).playerId === target) {
+            // Explicit message first: the close frame alone may not reach the client promptly.
+            socket.send(JSON.stringify({ type: "kicked" }));
+            socket.close(KICKED_CLOSE_CODE, "Kicked by the host");
+          }
+        }
+        break;
+      }
       case "reset":
         if (playerId !== meta.hostId) return;
         for (const p of players) {
@@ -205,6 +226,10 @@ export class Room extends DurableObject<Env> {
       return;
     }
     await this.ctx.storage.deleteAll();
+  }
+
+  private async kicked(): Promise<string[]> {
+    return (await this.ctx.storage.get<string[]>("kicked")) ?? [];
   }
 
   private async players(): Promise<Player[]> {
