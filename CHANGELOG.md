@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-09
+
 ### Added
 - The host can kick a player, who cannot rejoin that room.
 - The host can hand the host role to another player; when the host quits, the earliest online player takes it.
