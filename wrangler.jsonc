@@ -12,5 +12,7 @@
     "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Overridden by the deploy workflow with --var; "dev" means a local build.
+  "vars": { "BUILD_NUMBER": "dev", "COMMIT_SHA": "dev" }
 }

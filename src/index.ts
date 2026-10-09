@@ -1,3 +1,4 @@
+import pkg from "../package.json";
 import { CODE_RE, ROOM_MODES, Room, type RoomMode } from "./room";
 
 export { Room };
@@ -38,6 +39,10 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/version") {
+      return Response.json({ version: pkg.version, build: env.BUILD_NUMBER, commit: env.COMMIT_SHA });
+    }
 
     if (url.pathname === "/api/rooms") {
       if (request.method !== "POST") return error(405, "Method not allowed");

@@ -483,6 +483,17 @@ class RoomView {
   }
 }
 
+// ---------- Version ----------
+
+fetch("/api/version")
+  .then((res) => res.json())
+  .then(({ version, build, commit }) => {
+    const el = document.getElementById("version");
+    el.textContent = `v${version}`;
+    el.title = build === "dev" ? "Build local" : `Build ${build} (${commit})`;
+  })
+  .catch(() => {});
+
 // ---------- Routing ----------
 
 const roomMatch = location.pathname.match(/^\/r\/([A-Za-z0-9]{5})\/?$/);
