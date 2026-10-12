@@ -24,7 +24,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,8 +51,6 @@ jobs:
 
       # Roll rules, room rules and browser flows; nothing is deployed if they fail.
       - name: Test
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
         run: npm test
 
       - name: Deploy to Cloudflare

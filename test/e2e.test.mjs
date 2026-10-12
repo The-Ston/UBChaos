@@ -1,11 +1,12 @@
 // End-to-end flows in a real browser. Skipped when no Chromium-based browser is found
-// (set CHROME_PATH to point at one).
+// (set CHROME_PATH to point at one), except in CI where a missing browser fails.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import puppeteer from "puppeteer-core";
 import { findBrowser, startServer, wait } from "./helpers.mjs";
 
 const executablePath = findBrowser();
+if (!executablePath && process.env.CI) throw new Error("No Chromium-based browser found in CI (set CHROME_PATH)");
 const DESKTOP = { width: 1280, height: 860 };
 const PHONE = { width: 360, height: 760, isMobile: true, deviceScaleFactor: 2 };
 

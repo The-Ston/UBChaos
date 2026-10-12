@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       tag: ${{ steps.push.outputs.tag }}
     env:
@@ -81,7 +81,6 @@ jobs:
         env:
           TAG: ${{ steps.latest.outputs.tag }}
           PATCH: ${{ steps.groups.outputs.patch }}
-          CHROME_PATH: /usr/bin/google-chrome
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -130,7 +129,7 @@ jobs:
   report:
     needs: [sync, release]
     if: failure()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
