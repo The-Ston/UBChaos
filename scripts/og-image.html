@@ -29,5 +29,14 @@
     <div class="tagline">Ultimate Bravery entre amis</div>
     <div class="chips"><span class="chip">Normal</span><span class="chip">ARAM</span><span class="chip">ARAM du Chaos</span></div>
   </div>
+  <script>
+    // ?chips=A|B|C replaces the default chips (room images).
+    const chips = new URLSearchParams(location.search).get("chips");
+    if (chips) {
+      document.querySelector(".chips").replaceChildren(
+        ...chips.split("|").map((text) => Object.assign(document.createElement("span"), { className: "chip", textContent: text })),
+      );
+    }
+  </script>
 </body>
 </html>

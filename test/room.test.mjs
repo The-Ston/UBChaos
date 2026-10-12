@@ -45,14 +45,28 @@ describe("link previews", () => {
     assert.equal(meta(html, "og:title"), `Salon ${code} - UBChaos`);
     assert.equal(meta(html, "og:description"), "ARAM du Chaos - 3 builds au choix - 1 reroll - 1/10 joueurs - Hôte : Nico. Rejoins le salon pour tirer ton build !");
     assert.equal(meta(html, "og:url"), `${base}/r/${code}`);
-    assert.equal(meta(html, "og:image"), `${base}/og-image.png`);
+    assert.equal(meta(html, "og:image"), `${base}/og/aram-chaos-3-1.jpg`);
     assert.ok(html.includes('src="/app.js"'), "still the app page");
     socket.close();
+  });
+
+  it("has a pre-rendered image for every room setting", async () => {
+    for (const settings of [
+      { mode: "normal", buildChoices: 1, rerollLimit: null },
+      { mode: "aram", buildChoices: 5, rerollLimit: 0 },
+      { mode: "aram-chaos", buildChoices: 5, rerollLimit: 10 },
+    ]) {
+      const { code } = await createRoom(base, { playerId: newId("host"), ...settings });
+      const html = await fetch(`${base}/r/${code}`).then((r) => r.text());
+      const res = await fetch(meta(html, "og:image"));
+      assert.equal(res.headers.get("content-type"), "image/jpeg", `${meta(html, "og:image")} (run scripts/render-og-image.mjs)`);
+    }
   });
 
   it("says when the room does not exist", async () => {
     const html = await fetch(`${base}/r/ZZZZZ`).then((r) => r.text());
     assert.equal(meta(html, "og:description"), "Ce salon n'existe pas ou a expiré.");
+    assert.equal(meta(html, "og:image"), `${base}/og-image.png`);
   });
 
   it("escapes player names in the tags", async () => {

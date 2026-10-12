@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Changed
+- Room link previews: the image shows the room mode, builds to choose from and rerolls instead of the list of modes.
+
 ### Fixed
 - Builds follow every in-game item group: no more Black Cleaver with Serylda's Grudge, Lord Dominik's or Mortal Reminder, nor Terminus with another Fatality or Blight item. Mortal Reminder and Morellonomicon can now come together, as in game.
 - ARAM du Chaos: several Tear items (Manamune, Archangel's Staff, Winter's Approach) can come in the same build, as in game.

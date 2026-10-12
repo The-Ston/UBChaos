@@ -40,12 +40,14 @@ async function page(request: Request, env: Env): Promise<Response> {
   const asset = await env.ASSETS.fetch(new Request(new URL("/", url), request));
   let title = "UBChaos - Ultimate Bravery entre amis";
   let description = "Crée un salon, envoie le lien, chacun choisit son champion et tire son build.";
+  let image = "/og-image.png";
 
   const code = url.pathname.match(/^\/r\/([^/]+)\/?$/)?.[1]?.toUpperCase();
   if (code) {
     const summary = CODE_RE.test(code) ? await env.ROOMS.getByName(code).summary() : null;
     title = `Salon ${code} - UBChaos`;
     description = summary ? describeRoom(summary) : "Ce salon n'existe pas ou a expiré.";
+    if (summary) image = roomImage(summary);
   }
 
   const setContent = (content: string) => ({ element: (el: Element) => void el.setAttribute("content", content) });
@@ -54,8 +56,14 @@ async function page(request: Request, env: Env): Promise<Response> {
     .on('meta[property="og:description"]', setContent(description))
     .on('meta[name="description"]', setContent(description))
     .on('meta[property="og:url"]', setContent(url.href))
-    .on('meta[property="og:image"]', setContent(new URL("/og-image.png", url).href))
+    .on('meta[property="og:image"]', setContent(new URL(image, url).href))
     .transform(asset);
+}
+
+// Preview image showing the room settings, pre-rendered for every combination
+// by scripts/render-og-image.mjs.
+function roomImage(summary: { mode: RoomMode; buildChoices: number; rerollLimit: number | null }): string {
+  return `/og/${summary.mode}-${summary.buildChoices}-${summary.rerollLimit ?? "x"}.jpg`;
 }
 
 // "Normal - 3 builds au choix - 1 reroll - 2/10 joueurs - Hôte : Nico"
