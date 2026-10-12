@@ -1,0 +1,77 @@
+name: Monitor
+
+# Daily: checks production the way a player uses it (scripts/smoke-test.mjs).
+# A failure opens one issue; the next successful check closes it.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL to check (empty for production; to test failures)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  LABEL: production-down
+
+jobs:
+  check:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Smoke test
+        id: smoke
+        continue-on-error: true
+        env:
+          URL: ${{ inputs.url }}
+        run: |
+          set -o pipefail
+          node scripts/smoke-test.mjs "$URL" | tee "$RUNNER_TEMP/report.txt"
+
+      - name: Open an issue unless one is already open
+        if: steps.smoke.outcome == 'failure'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create "$LABEL" --color B60205 --description "Production check failures" 2>/dev/null || true
+          if [ -z "$(gh issue list --label "$LABEL" --state open --json number --jq '.[].number')" ]; then
+            {
+              echo "@The-Ston the daily production check failed: $RUN_URL"
+              echo
+              echo '```'
+              cat "$RUNNER_TEMP/report.txt"
+              echo '```'
+              echo
+              echo "The next successful check closes this issue."
+            } > "$RUNNER_TEMP/body.md"
+            gh issue create --label "$LABEL" --title "Production check failed" --body-file "$RUNNER_TEMP/body.md"
+          else
+            echo "A production issue is already open"
+          fi
+          exit 1
+
+      - name: Close open issues once back up
+        if: steps.smoke.outcome == 'success'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for number in $(gh issue list --label "$LABEL" --state open --json number --jq '.[].number'); do
+            gh issue close "$number" --comment "Production is back up: $RUN_URL"
+          done
