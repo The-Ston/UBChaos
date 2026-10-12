@@ -1,0 +1,151 @@
+name: Item groups
+
+# Daily: regenerates public/item-groups.js from the game files (CommunityDragon).
+# When the groups changed since the latest release, publishes a fix release built
+# from that release, so changes waiting on master are never released by the bot,
+# and reports the table, version and changelog section to master.
+# Any failure opens an issue (only one while it stays open).
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Do everything but push and release
+        type: boolean
+        default: false
+      cdragon_url:
+        description: CommunityDragon items file (empty for the default; to test failures)
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: item-groups
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.push.outputs.tag }}
+    env:
+      CDRAGON_URL: ${{ inputs.cdragon_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Find the latest release
+        id: latest
+        run: |
+          tag=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::master is at $version but the latest release is $tag"
+            exit 1
+          fi
+          if ! git cat-file -e "$tag:public/item-groups.js"; then
+            echo "::error::$tag has no public/item-groups.js: the first release with it must be made by hand"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Generate item groups
+        id: groups
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          node scripts/update-item-groups.mjs --out "$RUNNER_TEMP/item-groups.js"
+          if git show "$TAG:public/item-groups.js" | cmp -s - "$RUNNER_TEMP/item-groups.js"; then
+            echo "Item groups unchanged since $TAG"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git show "$TAG:public/item-groups.js" | diff - "$RUNNER_TEMP/item-groups.js" || true
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the fix release
+        id: release
+        if: steps.groups.outputs.changed == 'true'
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+          PATCH: ${{ steps.groups.outputs.patch }}
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          entry="Item groups updated from the game files (patch $PATCH)."
+          today=$(date -u +%F)
+
+          # The fix release: the latest release plus the new table only.
+          git worktree add --detach "$RUNNER_TEMP/fix" "$TAG"
+          cd "$RUNNER_TEMP/fix"
+          cp "$RUNNER_TEMP/item-groups.js" public/item-groups.js
+          npm ci
+          npm run check
+          npm test
+          version=$(npm version patch --no-git-tag-version)
+          version=${version#v}
+          node scripts/release-changelog.mjs "$version" "$today" "$entry"
+          git commit -am "Release v$version"
+          git tag -a "v$version" -m "Release v$version"
+
+          # master gets the same table, version and changelog section; [Unreleased] is kept.
+          cd "$GITHUB_WORKSPACE"
+          cp "$RUNNER_TEMP/item-groups.js" public/item-groups.js
+          npm version "$version" --no-git-tag-version
+          node scripts/release-changelog.mjs "$version" "$today" "$entry"
+          git commit -am "Update item groups for patch $PATCH (v$version)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Push
+        id: push
+        if: steps.groups.outputs.changed == 'true' && !inputs.dry_run
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git push --atomic origin master "refs/tags/v$VERSION"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+  # Tags pushed with the workflow token do not trigger workflows: call the release directly.
+  release:
+    needs: sync
+    if: needs.sync.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.sync.outputs.tag }}
+    secrets: inherit
+
+  report:
+    needs: [sync, release]
+    if: failure()
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open an issue unless one is already open
+        run: |
+          label=item-groups-sync
+          gh label create "$label" --color D93F0B --description "Item groups bot failures" 2>/dev/null || true
+          if [ -n "$(gh issue list --label "$label" --state open --json number --jq '.[].number')" ]; then
+            echo "An item groups issue is already open"
+            exit 0
+          fi
+          gh issue create --label "$label" --title "Item groups sync failed" --body "@The-Ston the daily item groups sync failed: $RUN_URL
+
+          Nothing is released when the sync fails. If the fix release tag was pushed but the deploy failed, re-run the failed jobs from the run page.
+
+          Close this issue once fixed: no other issue is opened while it stays open."

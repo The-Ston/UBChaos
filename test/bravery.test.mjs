@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ITEM_GROUPS, buildGameData, compactGameData, fetchDataDragon, rollBuild } from "../public/bravery.js";
+import { CDragonUnavailable, fetchGameItemGroups } from "../scripts/item-groups-source.mjs";
 
 const DRAWS = 2000;
 let data;
@@ -67,17 +68,26 @@ describe("items", () => {
     assert.ok(!shareGroup("3033", "3165"), "Mortal Reminder and Morellonomicon can be owned together");
   });
 
-  it("allows several Tear items in ARAM: Mayhem only", () => {
-    const shareGroup = (mode, a, b) => legendary(mode, a).groups.some((group) => legendary(mode, b).groups.includes(group));
-    assert.ok(shareGroup("normal", "3004", "3003"), "normal: Manamune and Archangel's Staff are both Manaflow items");
-    assert.ok(shareGroup("aram", "3004", "3003"), "aram: Manamune and Archangel's Staff are both Manaflow items");
-    assert.ok(!shareGroup("aram-chaos", "3004", "3003"), "aram-chaos: Manamune and Archangel's Staff can be owned together");
-    assert.ok(shareGroup("aram-chaos", "3003", "3053"), "aram-chaos: Archangel's Staff stays a Lifeline item");
+  it("keeps Tear items exclusive in every mode", () => {
+    for (const mode of ["normal", "aram", "aram-chaos"]) {
+      const shareGroup = (a, b) => legendary(mode, a).groups.some((group) => legendary(mode, b).groups.includes(group));
+      assert.ok(shareGroup("3004", "3003"), `${mode}: Manamune and Archangel's Staff are both Tear items`);
+    }
   });
 
   it("lists item groups with ids that still exist", () => {
     for (const [group, ids] of Object.entries(ITEM_GROUPS)) {
       for (const id of ids) assert.ok(data.items[id], `${group}: unknown item ${id}`);
+    }
+  });
+
+  it("matches the item groups of the game files", async (t) => {
+    try {
+      const { groups } = await fetchGameItemGroups();
+      assert.deepEqual(ITEM_GROUPS, groups, "public/item-groups.js is outdated: run node scripts/update-item-groups.mjs");
+    } catch (error) {
+      if (!(error instanceof CDragonUnavailable)) throw error;
+      t.skip(error.message);
     }
   });
 });

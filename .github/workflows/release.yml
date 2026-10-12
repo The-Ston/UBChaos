@@ -1,9 +1,16 @@
 name: Release
 
 # Pushing a vX.Y.Z tag deploys to Cloudflare and publishes a GitHub release.
+# The item groups bot calls it directly: tags it pushes do not trigger workflows.
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to release (vX.Y.Z)
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,12 +19,16 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.tag || github.ref }}
           # Full history: the build number is the commit count.
           fetch-depth: 0
 
@@ -31,8 +42,8 @@ jobs:
       - name: Check tag matches package.json
         run: |
           expected="v$(node -p "require('./package.json').version")"
-          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $expected"
+          if [ "$TAG" != "$expected" ]; then
+            echo "::error::Tag $TAG does not match package.json version $expected"
             exit 1
           fi
 
@@ -58,9 +69,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Notes are the changelog section of this version.
-          awk -v v="${GITHUB_REF_NAME#v}" '
+          awk -v v="${TAG#v}" '
             index($0, "## [" v "]") == 1 { found = 1; next }
             found && /^## \[/ { exit }
             found { print }
           ' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md
