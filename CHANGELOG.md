@@ -4,6 +4,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Fixed
+- Builds follow every in-game item group: no more Black Cleaver with Serylda's Grudge, Lord Dominik's or Mortal Reminder, nor Terminus with another Fatality or Blight item. Mortal Reminder and Morellonomicon can now come together, as in game.
+- ARAM du Chaos: several Tear items (Manamune, Archangel's Staff, Winter's Approach) can come in the same build, as in game.
+
 ## [1.2.0] - 2026-10-09
 
 ### Added

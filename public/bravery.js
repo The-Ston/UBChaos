@@ -22,7 +22,17 @@ export const MODES = {
   },
   aram: { label: "ARAM", map: "12", spellMode: "ARAM", runes: true, candidates: true, augments: false, roles: false },
   // "KIWI" is Riot's internal name for ARAM: Mayhem.
-  "aram-chaos": { label: "ARAM du Chaos", map: "12", spellMode: "KIWI", runes: false, candidates: true, augments: true, roles: false },
+  // Several Tear items can be owned together in ARAM: Mayhem.
+  "aram-chaos": {
+    label: "ARAM du Chaos",
+    map: "12",
+    spellMode: "KIWI",
+    runes: false,
+    candidates: true,
+    augments: true,
+    roles: false,
+    freeItemGroups: ["manaflow"],
+  },
 };
 
 // Keep in sync with ROLES in src/room.ts.
@@ -86,7 +96,6 @@ export function compactGameData({ version, champions, items, runes, summoners })
           {
             ...pickFields(item, ["name", "inStore", "tags", "maps", "from", "into", "requiredChampion", "requiredAlly", "hideFromAll"]),
             gold: { total: item.gold?.total, purchasable: item.gold?.purchasable },
-            passives: passiveNames(item.description ?? ""),
           },
         ]),
     ),
@@ -112,7 +121,7 @@ export function buildGameData({ version, champions, items, runes, summoners }) {
   const allSpells = Object.values(summoners);
 
   const pools = Object.fromEntries(
-    Object.entries(MODES).map(([mode, { map, spellMode }]) => {
+    Object.entries(MODES).map(([mode, { map, spellMode, freeItemGroups = [] }]) => {
       const onMap = shopItems.filter((item) => item.maps?.[map]);
       const boots = onMap.filter((item) => item.tags?.includes("Boots") && item.from?.includes("1001"));
       const legendaries = withExclusiveGroups(
@@ -124,6 +133,7 @@ export function buildGameData({ version, champions, items, runes, summoners }) {
               item.gold.total >= LEGENDARY_MIN_GOLD,
           ),
         ),
+        freeItemGroups,
       );
       const spells = allSpells.filter((spell) => spell.modes.includes(spellMode));
       // Starter role items: jungle pets and the final upgrades of the support quest item.
@@ -155,26 +165,25 @@ export function buildGameData({ version, champions, items, runes, summoners }) {
 // "16.20.1" -> "16.20", the patch name players know.
 export const patchName = (version) => version.split(".").slice(0, 2).join(".");
 
-// Items in the same group cannot be owned together. Unique passives sharing a
-// name form a group (Hydras, Lifeline, Spellblade...); some groups only share
-// a component: Last Whisper and Blighting Jewel.
-const EXCLUSIVE_COMPONENTS = ["3035", "4630"];
+// Items in the same group cannot be owned together. Data Dragon does not expose
+// these groups, so legendaries are listed by hand from
+// https://wiki.leagueoflegends.com/en-us/Item_group
+export const ITEM_GROUPS = {
+  annul: ["4632", "3102", "3814"], // Verdant Barrier, Banshee's Veil, Edge of Night
+  blight: ["4010", "8010", "3137", "3302", "3135"], // Bloodletter's Curse, Cryptbloom, Terminus, Void Staff
+  fatality: ["3071", "3036", "3033", "6694", "3302"], // Black Cleaver, Lord Dominik's, Mortal Reminder, Serylda's, Terminus
+  hydra: ["6698", "3074", "6631", "3748"], // Profane, Ravenous, Stridebreaker, Titanic
+  immolate: ["3068", "6664"], // Sunfire Aegis, Hollow Radiance
+  lifeline: ["3003", "3155", "6673", "3156", "2525", "3040", "3053"], // Archangel's, Hexdrinker, Shieldbow, Maw, Protoplasm, Seraph's, Sterak's
+  manaflow: ["3003", "3004", "3119"], // Archangel's, Manamune, Winter's Approach
+  quicksilver: ["3139", "3140"], // Mercurial Scimitar, Quicksilver Sash
+  spellblade: ["2510", "3508", "6662", "3100", "3078"], // Dusk and Dawn, Essence Reaver, Iceborn, Lich Bane, Trinity Force
+};
 
-function passiveNames(description) {
-  return [...new Set([...description.matchAll(/<passive>([^<]+)<\/passive>/g)].map((match) => match[1].trim()))];
-}
-
-function withExclusiveGroups(items) {
-  const counts = new Map();
-  for (const item of items) {
-    for (const name of item.passives) counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
+function withExclusiveGroups(items, freeGroups) {
   return items.map((item) => ({
     ...item,
-    groups: [
-      ...item.passives.filter((name) => counts.get(name) > 1),
-      ...EXCLUSIVE_COMPONENTS.filter((id) => item.from?.includes(id)).map((id) => `from:${id}`),
-    ],
+    groups: Object.keys(ITEM_GROUPS).filter((group) => !freeGroups.includes(group) && ITEM_GROUPS[group].includes(item.id)),
   }));
 }
 

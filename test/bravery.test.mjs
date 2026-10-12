@@ -1,7 +1,7 @@
 // Roll rules, checked over many draws against live Data Dragon data.
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { buildGameData, compactGameData, fetchDataDragon, rollBuild } from "../public/bravery.js";
+import { ITEM_GROUPS, buildGameData, compactGameData, fetchDataDragon, rollBuild } from "../public/bravery.js";
 
 const DRAWS = 2000;
 let data;
@@ -57,6 +57,27 @@ describe("items", () => {
         const groups = rollBuild(data, mode, "adc", "Ahri").items.flatMap((id) => legendary(mode, id)?.groups ?? []);
         assert.equal(new Set(groups).size, groups.length, `${mode}: ${groups}`);
       }
+    }
+  });
+
+  it("follows the in-game item groups", () => {
+    const shareGroup = (a, b) => legendary("normal", a).groups.some((group) => legendary("normal", b).groups.includes(group));
+    assert.ok(shareGroup("3071", "6694"), "Black Cleaver and Serylda's Grudge are both Fatality items");
+    assert.ok(shareGroup("3302", "3135"), "Terminus and Void Staff are both Blight items");
+    assert.ok(!shareGroup("3033", "3165"), "Mortal Reminder and Morellonomicon can be owned together");
+  });
+
+  it("allows several Tear items in ARAM: Mayhem only", () => {
+    const shareGroup = (mode, a, b) => legendary(mode, a).groups.some((group) => legendary(mode, b).groups.includes(group));
+    assert.ok(shareGroup("normal", "3004", "3003"), "normal: Manamune and Archangel's Staff are both Manaflow items");
+    assert.ok(shareGroup("aram", "3004", "3003"), "aram: Manamune and Archangel's Staff are both Manaflow items");
+    assert.ok(!shareGroup("aram-chaos", "3004", "3003"), "aram-chaos: Manamune and Archangel's Staff can be owned together");
+    assert.ok(shareGroup("aram-chaos", "3003", "3053"), "aram-chaos: Archangel's Staff stays a Lifeline item");
+  });
+
+  it("lists item groups with ids that still exist", () => {
+    for (const [group, ids] of Object.entries(ITEM_GROUPS)) {
+      for (const id of ids) assert.ok(data.items[id], `${group}: unknown item ${id}`);
     }
   });
 });
