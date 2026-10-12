@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-12
+
 ### Changed
 - Room link previews: the image shows the room mode, builds to choose from and rerolls instead of the list of modes.
 
