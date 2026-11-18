@@ -8,6 +8,9 @@ const LOCALE = "fr_FR";
 const LEGENDARY_MIN_GOLD = 2000;
 // ARAM: Mayhem offers 3 augments at each of these levels; each card can be rerolled once.
 export const AUGMENT_LEVELS = [1, 7, 11, 15];
+// "Bonus de stats": 750 gold, opens a choice of 3 permanent stat bonuses (and a hat).
+export const STAT_BONUS_ITEM = "6032";
+export const STAT_SIDES = { 1: "à gauche", 2: "au centre", 3: "à droite" };
 const AUGMENT_CHOICES = 3;
 
 // Keep in sync with ROOM_MODES in src/room.ts.
@@ -226,6 +229,8 @@ export function rollBuild(data, mode, chosenRole = null, champion = null) {
     champion,
     skillOrder: rollSkillOrder(champion),
     augments: MODES[mode]?.augments ? rollAugments() : null,
+    // Stats bought with surplus gold (750 gold, 3 cards): always take the card at this position.
+    statPick: MODES[mode]?.augments ? pick([1, 2, 3]) : null,
   };
 }
 

@@ -137,6 +137,7 @@ describe("modes", () => {
       const build = rollBuild(data, mode, null, "Ahri");
       assert.ok(build.runes, mode);
       assert.equal(build.augments, null, mode);
+      assert.equal(build.statPick, null, mode);
     }
   });
 
@@ -148,6 +149,7 @@ describe("modes", () => {
       assert.ok(reroll.every((position) => position >= 1 && position <= 3));
       assert.ok(pick >= 1 && pick <= 3);
     }
+    assert.ok([1, 2, 3].includes(build.statPick));
   });
 
   it("keeps the played champion in the build", () => {

@@ -1,7 +1,7 @@
 // Draws a player's build as a PNG (for pasting in Discord...). Drawn on a canvas
 // rather than captured from the page, so it does not depend on page styles;
 // Data Dragon serves its images with CORS, so the canvas stays exportable.
-import { MODES, ROLES, findRune } from "/bravery.js";
+import { MODES, ROLES, STAT_BONUS_ITEM, STAT_SIDES, findRune } from "/bravery.js";
 
 const SCALE = 2;
 const WIDTH = 560;
@@ -105,15 +105,20 @@ function layout(ctx, card) {
   });
 
   if (build.augments) {
-    section("Optimisations", build.augments.length * 34 + 16, (top) => {
+    // Builds rolled before the stat option have no statPick.
+    const rows = [...build.augments, ...(build.statPick ? [{ stat: true, reroll: [], pick: build.statPick }] : [])];
+    const hintHeight = build.statPick ? 16 : 0;
+    section("Optimisations", rows.length * 34 + hintHeight + 16, (top) => {
       ctx.fillStyle = COLORS.muted;
       ctx.font = `500 12px ${FONT}`;
-      ctx.fillText("↻ : à reroll - encadré : à prendre après les rerolls", PAD, top + build.augments.length * 34 + 12);
-      build.augments.forEach(({ level, reroll, pick }, row) => {
+      ctx.fillText("↻ : à reroll - encadré : à prendre après les rerolls", PAD, top + rows.length * 34 + hintHeight + 12);
+      if (build.statPick) ctx.fillText(`Bonus de stats : toujours ${STAT_SIDES[build.statPick]}`, PAD + 70, top + rows.length * 34 + 8);
+      rows.forEach(({ level, stat, reroll, pick }, row) => {
         const rowY = top + row * 34;
         ctx.fillStyle = COLORS.goldBright;
         ctx.font = `700 15px ${FONT}`;
-        ctx.fillText(`Niv. ${level}`, PAD, rowY + 19);
+        if (stat) drawIcon(ctx, images.statBonus, PAD, rowY, 28);
+        else ctx.fillText(`Niv. ${level}`, PAD, rowY + 19);
         [1, 2, 3].forEach((position, i) => {
           const x = PAD + 70 + i * 62;
           const rerolled = reroll.includes(position);
@@ -149,17 +154,18 @@ function layout(ctx, card) {
 export async function cardImage({ player, build, data, mode, roleLabel }) {
   const icon = (src) => (src ? loadImage(src) : Promise.resolve(null));
   const rune = (id) => icon(findRune(data, id) && data.img.rune(findRune(data, id).icon));
-  const [portrait, items, primaryRunes, secondaryRunes, spells] = await Promise.all([
+  const [portrait, items, primaryRunes, secondaryRunes, spells, statBonus] = await Promise.all([
     icon(build.champion && data.img.champion(build.champion)),
     Promise.all(build.items.map((id) => icon(data.img.item(id)))),
     Promise.all((build.runes?.primary ?? []).map(rune)),
     Promise.all((build.runes?.secondary ?? []).map(rune)),
     Promise.all(build.spells.map((id) => icon(data.img.spell(id)))),
+    icon(build.statPick && data.img.item(STAT_BONUS_ITEM)),
   ]);
 
   const card = {
     build,
-    images: { portrait, items, primaryRunes, secondaryRunes, spells },
+    images: { portrait, items, primaryRunes, secondaryRunes, spells, statBonus },
     playerName: player.name,
     championName: data.championsById[build.champion]?.name ?? "",
     modeLabel: MODES[mode]?.label ?? "",

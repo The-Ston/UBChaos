@@ -1,4 +1,4 @@
-import { MODES, ROLES, findRune, loadGameData, patchName, randomChampion, rollBuild } from "/bravery.js";
+import { MODES, ROLES, STAT_BONUS_ITEM, STAT_SIDES, findRune, loadGameData, patchName, randomChampion, rollBuild } from "/bravery.js";
 import { searchKeys, searchRank } from "/search.js";
 import { cardImage, copyOrDownload } from "/card-image.js";
 import { icon } from "/icons.js";
@@ -178,7 +178,7 @@ function showHome(message = "") {
     h(
       "div",
       { class: "home" },
-      h("div", {}, h("h1", {}, "Ultimate Bravery"), h("p", { class: "muted" }, "Crée un salon, envoie le lien, chacun choisit son champion et tire son build.")),
+      h("p", { class: "muted intro" }, "Crée un salon, envoie le lien, chacun choisit son champion et tire son build."),
       h("div", { class: "panel" }, h("label", {}, "Pseudo", name)),
       h(
         "div",
@@ -815,12 +815,12 @@ class RoomView {
         h("div", { class: "icons small" }, build.spells.map((id) => icon(this.data.img.spell(id), this.data.spellsById[id]?.name ?? id))),
         build.skillOrder && h("span", { class: "skill-order" }, build.skillOrder.join(" > ")),
       ),
-      build.augments && [h("div", { class: "section-label" }, "Optimisations"), this.augmentsView(build.augments)],
+      build.augments && [h("div", { class: "section-label" }, "Optimisations"), this.augmentsView(build.augments, build.statPick)],
       build.role === "adc" && h("p", { class: "build-note" }, "ADC : tes bottes passeront dans l'emplacement de quête, d'où un légendaire en plus."),
     );
   }
 
-  augmentsView(augments) {
+  augmentsView(augments, statPick) {
     return h(
       "div",
       { class: "augments" },
@@ -833,6 +833,19 @@ class RoomView {
         });
         return h("div", { class: "augment-row" }, h("span", { class: "augment-level" }, `Niv. ${level}`), h("div", { class: "row" }, cards));
       }),
+      // Builds rolled before this option have no statPick.
+      statPick &&
+        h(
+          "div",
+          { class: "augment-row stat-row" },
+          h("span", { class: "augment-level" }, h("img", { class: "stat-icon", src: this.data.img.item(STAT_BONUS_ITEM), alt: "Bonus de stats", title: "Bonus de stats (750 PO)" })),
+          h(
+            "div",
+            { class: "row" },
+            [1, 2, 3].map((position) => h("span", { class: position === statPick ? "augment-card pick" : "augment-card", title: position === statPick ? "À prendre" : "" }, String(position))),
+          ),
+        ),
+      statPick && h("p", { class: "muted stat-hint" }, `Bonus de stats : toujours ${STAT_SIDES[statPick]}`),
       h("p", { class: "muted augment-legend" }, "↻ : à reroll - encadré : à prendre après les rerolls"),
     );
   }

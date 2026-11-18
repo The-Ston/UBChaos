@@ -139,6 +139,9 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
     await createRoom(page, "Chaos", "ARAM du Chaos");
     const selected = () => page.$$eval(".champion-grid button.selected", (bs) => bs.map((b) => b.dataset.id ?? "random"));
     await page.click(".champion-grid button[data-id='Ahri']");
+    // Each click waits for the room state echo, which would otherwise undo the next local toggle.
+    await page.waitForSelector(".champion-grid button[data-id='Ahri'].selected");
+    await wait(300);
     await page.click(".champion-grid button[data-id='Lux']");
     await wait(300);
     assert.deepEqual(await selected(), ["Ahri", "Lux"]);
@@ -151,7 +154,9 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
 
     await page.locator("::-p-text(Tirer mon build)").click();
     await page.waitForSelector(".player.me .build");
-    assert.equal(await page.$$eval(".player.me .augment-row", (rows) => rows.length), 4);
+    assert.equal(await page.$$eval(".player.me .augment-row:not(.stat-row)", (rows) => rows.length), 4);
+    assert.ok(await page.$(".player.me .stat-row img.stat-icon"), "stat bonus icon shown");
+    assert.match(await page.$eval(".player.me .stat-hint", (p) => p.textContent), /toujours (à gauche|au centre|à droite)/);
     const labels = await page.$$eval(".player.me .section-label", (ls) => ls.map((l) => l.textContent));
     assert.ok(!labels.includes("Runes"));
   });

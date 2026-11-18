@@ -162,12 +162,11 @@ main {
   display: grid;
   gap: 16px;
   max-width: 420px;
-  margin: 8vh auto 0;
+  margin: 0 auto;
 }
 
-.home h1 {
-  margin: 0 0 4px;
-  color: var(--gold-bright);
+.home .intro {
+  margin: 0;
 }
 
 label {
@@ -551,6 +550,19 @@ body.picking main {
 .augment-row .row {
   gap: 4px;
   flex-wrap: nowrap;
+}
+
+.stat-icon {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+}
+
+/* Right under the stat row (the grid gap is 6px), aligned with its cards. */
+.stat-hint {
+  margin: -4px 0 0 60px;
+  font-size: 0.8rem;
 }
 
 .augment-card {
