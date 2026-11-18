@@ -4,6 +4,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-18
+
+### Fixed
+- Discord showed the old link preview image: preview image URLs now change with each release.
+
 ## [1.5.0] - 2026-11-18
 
 ### Added
