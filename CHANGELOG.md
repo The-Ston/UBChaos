@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-18
+
 ### Added
 - ARAM du Chaos: the build also says which card to take from the "Bonus de stats" item (750 gold, bought with surplus gold): always left, center or right.
 
