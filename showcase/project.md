@@ -1,6 +1,6 @@
 ---
 name: UBChaos
-description: Ultimate Bravery entre amis : crée un salon, envoie le lien, chacun choisit son champion et tire son build.
+description: "Ultimate Bravery entre amis : crée un salon, envoie le lien, chacun choisit son champion et tire son build."
 tags: [Jeu]
 links:
   - label: Jouer
