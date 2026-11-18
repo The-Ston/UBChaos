@@ -1,0 +1,87 @@
+name: Showcase
+
+# Regenerates the images of showcase/ (read by the Home site) and commits them
+# to master when they changed. Called by the release workflow after each
+# deployment, or run by hand. Runs on Windows so the screenshots use Segoe UI,
+# as the site shows on Windows. Any failure opens an issue (only one while it
+# stays open).
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Regenerate the images but do not push
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: showcase
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Regenerate the images
+        run: node scripts/update-showcase.mjs
+
+      - run: node --test test/showcase.test.mjs
+
+      - name: Commit and push
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if [ -z "$(git status --porcelain showcase)" ]; then
+            echo "Showcase images unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add showcase
+          git commit -m "Update showcase images"
+          # master may have moved meanwhile (item groups bot): rebase and retry.
+          for attempt in 1 2 3; do
+            git pull --rebase origin master && git push origin HEAD:master && exit 0
+            sleep 10
+          done
+          exit 1
+
+  report:
+    needs: update
+    if: failure()
+    runs-on: ubuntu-26.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open an issue unless one is already open
+        run: |
+          label=showcase-sync
+          gh label create "$label" --color D93F0B --description "Showcase images bot failures" 2>/dev/null || true
+          if [ -n "$(gh issue list --label "$label" --state open --json number --jq '.[].number')" ]; then
+            echo "A showcase issue is already open"
+            exit 0
+          fi
+          gh issue create --label "$label" --title "Showcase update failed" --body "@The-Ston the showcase images could not be updated: $RUN_URL
+
+          The site is not affected. Re-run the workflow by hand once fixed (Actions > Showcase > Run workflow).
+
+          Close this issue once fixed: no other issue is opened while it stays open."

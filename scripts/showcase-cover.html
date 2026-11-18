@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Cover of the Home showcase (showcase/cover.png, 1600x900), rendered by scripts/update-showcase.mjs:
+     the banner smoke and logo above a capture of a room. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1600px; height: 900px; overflow: hidden; background: #0a0e14; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .band { position: absolute; left: 0; top: 0; width: 1600px; height: 440px; overflow: hidden; border-bottom: 2px solid #c8aa6e; background: #0b1119; }
+  .band img { width: 1600px; height: 440px; object-fit: cover; object-position: 50% 40%; }
+  .head { position: absolute; left: 0; right: 0; top: 44px; display: flex; align-items: center; justify-content: center; gap: 28px; }
+  .mark { width: 170px; height: 170px; filter: drop-shadow(0 6px 24px rgba(5, 8, 12, 0.8)); }
+  .title { font-weight: 800; font-size: 104px; line-height: 1; letter-spacing: 0.04em; color: #f0e6d2; text-shadow: 0 4px 24px rgba(5, 8, 12, 0.85); }
+  .title span { color: #c8aa6e; }
+  .tagline { margin-top: 12px; color: #c9d1dc; font-size: 24px; letter-spacing: 0.2em; text-transform: uppercase; text-shadow: 0 2px 12px rgba(5, 8, 12, 0.95); }
+  /* The room capture is 1440x900: show its 1100x540 content area from (170, 80), scaled to 1200 px wide. */
+  .shot { position: absolute; left: 200px; top: 280px; width: 1200px; height: 660px; overflow: hidden; border: 2px solid #c8aa6e; border-radius: 18px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7); }
+  .shot img { position: absolute; width: 1571px; left: -185px; top: -87px; }
+</style>
+</head>
+<body>
+  <div class="band"><img src="og-smoke.svg" alt=""></div>
+  <div class="head">
+    <img class="mark" src="../public/logo.svg" alt="">
+    <div>
+      <div class="title">UB<span>Chaos</span></div>
+      <div class="tagline">Ultimate Bravery entre amis</div>
+    </div>
+  </div>
+  <div class="shot"><img src="../showcase/screenshots/salon.png" alt=""></div>
+</body>
+</html>

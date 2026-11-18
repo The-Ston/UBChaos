@@ -2,6 +2,7 @@ name: Release
 
 # Pushing a vX.Y.Z tag deploys to Cloudflare and publishes a GitHub release.
 # The item groups bot calls it directly: tags it pushes do not trigger workflows.
+# After the deployment, the Showcase workflow refreshes the images of showcase/.
 on:
   push:
     tags: ["v*.*.*"]
@@ -73,3 +74,11 @@ jobs:
             found { print }
           ' CHANGELOG.md > notes.md
           gh release create "$TAG" --title "$TAG" --notes-file notes.md
+
+  # Refreshes the screenshots of showcase/ (Home site) from the released code.
+  showcase:
+    needs: deploy
+    permissions:
+      contents: write
+      issues: write
+    uses: ./.github/workflows/showcase.yml
