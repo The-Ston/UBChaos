@@ -10,7 +10,7 @@ Ultimate Bravery rooms for League of Legends, on Cloudflare Workers + Durable Ob
 - Link previews: the Worker serves `/` and `/r/*` and fills the Open Graph tags (room details, absolute URLs) with HTMLRewriter. Preview images are rendered from `scripts/og-image.html` by `node scripts/render-og-image.mjs` and committed: `public/og-image.png` for the site, and `public/og/<mode>-<choices>-<rerolls|x>.jpg` for each room setting combination (re-run it when modes or room limits change).
 - Item groups (items that cannot be owned together): Data Dragon lacks them, so `public/item-groups.js` is generated from the game files on CommunityDragon by `node scripts/update-item-groups.mjs` (never edit it by hand, no per-mode exceptions). A test fails when it is outdated (skipped if CommunityDragon is down). The `Item groups` workflow runs daily: when the groups changed since the latest release, the bot publishes a patch release built from that release tag (the tag is off master, so pending changes are never released by the bot) and commits the same table, version and changelog section to master. Any failure opens one `item-groups-sync` issue.
 - Monitoring: the `Monitor` workflow runs `node scripts/smoke-test.mjs` daily against production (pages, game data, a real room over WebSocket). A failure opens one `production-down` issue; the next successful check closes it. Run it against any deployment with `node scripts/smoke-test.mjs <base url>`.
-- Production: https://ubchaos.pilalheur.workers.dev (the Cloudflare account's workers.dev subdomain is shared with Pilalheur; do not rename it).
+- Production: https://ubchaos.theston.workers.dev (workers.dev subdomain of the Cloudflare account, shared by its other Workers).
 
 ## Versioning
 

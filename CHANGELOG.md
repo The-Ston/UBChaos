@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Changed
+- The site moved to https://ubchaos.theston.workers.dev (the former ubchaos.pilalheur.workers.dev address no longer works).
+
 ## [1.3.0] - 2026-10-12
 
 ### Changed

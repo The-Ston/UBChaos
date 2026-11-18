@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { connect, createRoom, wait } from "../test/helpers.mjs";
 
-const base = (process.argv[2] || "https://ubchaos.pilalheur.workers.dev").replace(/\/$/, "");
+const base = (process.argv[2] || "https://ubchaos.theston.workers.dev").replace(/\/$/, "");
 
 async function check(name, run) {
   try {
