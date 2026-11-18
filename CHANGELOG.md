@@ -4,6 +4,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-18
+
 ### Added
 - Browser tab icon (favicon).
 - "The-Ston" in the footer links to the author's other projects.
