@@ -45,7 +45,7 @@ describe("link previews", () => {
     assert.equal(meta(html, "og:title"), `Salon ${code} - UBChaos`);
     assert.equal(meta(html, "og:description"), "ARAM du Chaos - 3 builds au choix - 1 reroll - 1/10 joueurs - Hôte : Nico. Rejoins le salon pour tirer ton build !");
     assert.equal(meta(html, "og:url"), `${base}/r/${code}`);
-    assert.equal(meta(html, "og:image"), `${base}/og/aram-chaos-3-1.jpg`);
+    assert.equal(meta(html, "og:image"), `${base}/og/aram-chaos-3-1.jpg?v=dev`);
     assert.ok(html.includes('src="/app.js"'), "still the app page");
     socket.close();
   });
@@ -66,7 +66,7 @@ describe("link previews", () => {
   it("says when the room does not exist", async () => {
     const html = await fetch(`${base}/r/ZZZZZ`).then((r) => r.text());
     assert.equal(meta(html, "og:description"), "Ce salon n'existe pas ou a expiré.");
-    assert.equal(meta(html, "og:image"), `${base}/og-image.png`);
+    assert.equal(meta(html, "og:image"), `${base}/og-image.png?v=dev`);
   });
 
   it("escapes player names in the tags", async () => {

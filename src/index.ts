@@ -56,8 +56,15 @@ async function page(request: Request, env: Env): Promise<Response> {
     .on('meta[property="og:description"]', setContent(description))
     .on('meta[name="description"]', setContent(description))
     .on('meta[property="og:url"]', setContent(url.href))
-    .on('meta[property="og:image"]', setContent(new URL(image, url).href))
+    .on('meta[property="og:image"]', setContent(versioned(new URL(image, url), env)))
     .transform(asset);
+}
+
+// Discord caches preview images by URL for a long time: a new deployment gives
+// them a new URL so a redesigned image shows up.
+function versioned(image: URL, env: Env): string {
+  image.searchParams.set("v", env.COMMIT_SHA);
+  return image.href;
 }
 
 // Preview image showing the room settings, pre-rendered for every combination
