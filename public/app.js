@@ -215,6 +215,7 @@ async function roomAccess(code) {
 
 function leaveToHome(message) {
   document.body.classList.remove("picking", "modal-open");
+  document.documentElement.classList.remove("in-room"); // back to the full banner
   history.replaceState(null, "", "/");
   showHome(message);
 }

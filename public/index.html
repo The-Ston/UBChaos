@@ -16,18 +16,26 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
+    <!-- Rooms get the compact banner; set before the first paint to avoid a jump. -->
+    <script>
+      document.documentElement.classList.toggle("in-room", location.pathname.startsWith("/r/"));
+    </script>
     <script type="module" src="/app.js"></script>
   </head>
   <body>
     <header class="topbar">
-      <a href="/" class="logo">UB<span>Chaos</span></a>
-      <span class="tagline">Ultimate Bravery entre amis</span>
+      <a href="/" class="logo-mark" tabindex="-1" aria-hidden="true"><img src="/logo.svg" alt="" width="148" height="148" /></a>
+      <div class="brand">
+        <a href="/" class="logo">UB<span>Chaos</span></a>
+        <span class="tagline">Ultimate Bravery entre amis</span>
+      </div>
     </header>
     <main id="app"><p class="muted">Chargement…</p></main>
     <footer class="site-footer">
       <details>
-        <summary>Fait par The-Ston - Non affilié à Riot Games - Mentions légales<span id="version" class="version"></span><span id="patch"></span></summary>
+        <summary>Fait par <a href="https://home.theston.workers.dev">The-Ston</a> - Non affilié à Riot Games - Mentions légales<span id="version" class="version"></span><span id="patch"></span></summary>
         <p>Hébergé par Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, USA.</p>
         <p>
           Le site garde ton pseudo et un identifiant aléatoire dans ton navigateur, et ton pseudo sur le serveur

@@ -188,6 +188,8 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
 
     await host.click(".player:not(.me):last-child .card-actions button[title='Exclure du salon']");
     await third.waitForFunction(() => location.pathname === "/" && document.querySelector(".error")?.textContent.includes("exclu"));
+    // The host re-renders the cards when the kick lands: wait for it before clicking again.
+    await host.waitForFunction(() => document.querySelectorAll(".player").length === 2);
 
     await host.click(".player:not(.me) .card-actions button[title='Nommer hôte']");
     await guest.waitForFunction(() => document.querySelectorAll(".player .card-actions button[title='Exclure du salon']").length === 1);

@@ -4,6 +4,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Added
+- Browser tab icon (favicon).
+- "The-Ston" in the footer links to the author's other projects.
+
+### Changed
+- New logo and a new banner at the top of the site, compact inside rooms.
+- Link previews (Discord...) use the new logo and look.
+
 ## [1.3.1] - 2026-11-18
 
 ### Changed
