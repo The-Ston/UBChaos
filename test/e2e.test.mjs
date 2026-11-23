@@ -154,7 +154,10 @@ describe("browser", { skip: !executablePath && "no Chromium-based browser found"
 
     await page.locator("::-p-text(Tirer mon build)").click();
     await page.waitForSelector(".player.me .build");
-    assert.equal(await page.$$eval(".player.me .augment-row:not(.stat-row)", (rows) => rows.length), 4);
+    assert.equal(await page.$$eval(".player.me .augment-row:not(.stat-row, .random-row)", (rows) => rows.length), 4);
+    // The random augment row sits between the level 15 row and the stat row.
+    const rowLabels = await page.$$eval(".player.me .augment-row .augment-level", (spans) => spans.map((s) => s.textContent));
+    assert.deepEqual(rowLabels, ["Niv. 1", "Niv. 7", "Niv. 11", "Niv. 15", "Autre", ""]);
     assert.ok(await page.$(".player.me .stat-row img.stat-icon"), "stat bonus icon shown");
     assert.match(await page.$eval(".player.me .stat-hint", (p) => p.textContent), /toujours (à gauche|au centre|à droite)/);
     const labels = await page.$$eval(".player.me .section-label", (ls) => ls.map((l) => l.textContent));

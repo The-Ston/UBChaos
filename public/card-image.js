@@ -1,7 +1,7 @@
 // Draws a player's build as a PNG (for pasting in Discord...). Drawn on a canvas
 // rather than captured from the page, so it does not depend on page styles;
 // Data Dragon serves its images with CORS, so the canvas stays exportable.
-import { MODES, ROLES, STAT_BONUS_ITEM, STAT_SIDES, findRune } from "/bravery.js";
+import { MODES, RANDOM_AUGMENT_LABEL, ROLES, STAT_BONUS_ITEM, STAT_SIDES, findRune } from "/bravery.js";
 
 const SCALE = 2;
 const WIDTH = 560;
@@ -105,20 +105,24 @@ function layout(ctx, card) {
   });
 
   if (build.augments) {
-    // Builds rolled before the stat option have no statPick.
-    const rows = [...build.augments, ...(build.statPick ? [{ stat: true, reroll: [], pick: build.statPick }] : [])];
+    // Builds rolled before these options have no randomAugment or statPick.
+    const rows = [
+      ...build.augments.map((augment) => ({ ...augment, label: `Niv. ${augment.level}` })),
+      ...(build.randomAugment ? [{ ...build.randomAugment, label: RANDOM_AUGMENT_LABEL }] : []),
+      ...(build.statPick ? [{ stat: true, reroll: [], pick: build.statPick }] : []),
+    ];
     const hintHeight = build.statPick ? 16 : 0;
     section("Optimisations", rows.length * 34 + hintHeight + 16, (top) => {
       ctx.fillStyle = COLORS.muted;
       ctx.font = `500 12px ${FONT}`;
       ctx.fillText("↻ : à reroll - encadré : à prendre après les rerolls", PAD, top + rows.length * 34 + hintHeight + 12);
       if (build.statPick) ctx.fillText(`Bonus de stats : toujours ${STAT_SIDES[build.statPick]}`, PAD + 70, top + rows.length * 34 + 8);
-      rows.forEach(({ level, stat, reroll, pick }, row) => {
+      rows.forEach(({ label, stat, reroll, pick }, row) => {
         const rowY = top + row * 34;
         ctx.fillStyle = COLORS.goldBright;
         ctx.font = `700 15px ${FONT}`;
         if (stat) drawIcon(ctx, images.statBonus, PAD, rowY, 28);
-        else ctx.fillText(`Niv. ${level}`, PAD, rowY + 19);
+        else ctx.fillText(label, PAD, rowY + 19);
         [1, 2, 3].forEach((position, i) => {
           const x = PAD + 70 + i * 62;
           const rerolled = reroll.includes(position);

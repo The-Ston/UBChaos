@@ -137,15 +137,16 @@ describe("modes", () => {
       const build = rollBuild(data, mode, null, "Ahri");
       assert.ok(build.runes, mode);
       assert.equal(build.augments, null, mode);
+      assert.equal(build.randomAugment, null, mode);
       assert.equal(build.statPick, null, mode);
     }
   });
 
-  it("rolls no runes and 4 augment instructions in ARAM du Chaos", () => {
+  it("rolls no runes and augment instructions (4 levels + random augment) in ARAM du Chaos", () => {
     const build = rollBuild(data, "aram-chaos", null, "Ahri");
     assert.equal(build.runes, null);
     assert.deepEqual(build.augments.map((augment) => augment.level), [1, 7, 11, 15]);
-    for (const { reroll, pick } of build.augments) {
+    for (const { reroll, pick } of [...build.augments, build.randomAugment]) {
       assert.ok(reroll.every((position) => position >= 1 && position <= 3));
       assert.ok(pick >= 1 && pick <= 3);
     }

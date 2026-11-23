@@ -1,4 +1,4 @@
-import { MODES, ROLES, STAT_BONUS_ITEM, STAT_SIDES, findRune, loadGameData, patchName, randomChampion, rollBuild } from "/bravery.js";
+import { MODES, RANDOM_AUGMENT_LABEL, ROLES, STAT_BONUS_ITEM, STAT_SIDES, findRune, loadGameData, patchName, randomChampion, rollBuild } from "/bravery.js";
 import { searchKeys, searchRank } from "/search.js";
 import { cardImage, copyOrDownload } from "/card-image.js";
 import { icon } from "/icons.js";
@@ -815,23 +815,25 @@ class RoomView {
         h("div", { class: "icons small" }, build.spells.map((id) => icon(this.data.img.spell(id), this.data.spellsById[id]?.name ?? id))),
         build.skillOrder && h("span", { class: "skill-order" }, build.skillOrder.join(" > ")),
       ),
-      build.augments && [h("div", { class: "section-label" }, "Optimisations"), this.augmentsView(build.augments, build.statPick)],
+      build.augments && [h("div", { class: "section-label" }, "Optimisations"), this.augmentsView(build)],
       build.role === "adc" && h("p", { class: "build-note" }, "ADC : tes bottes passeront dans l'emplacement de quête, d'où un légendaire en plus."),
     );
   }
 
-  augmentsView(augments, statPick) {
+  augmentsView({ augments, randomAugment, statPick }) {
+    // Builds rolled before the random augment option have no randomAugment.
+    const rows = [...augments.map((augment) => ({ ...augment, label: `Niv. ${augment.level}` })), ...(randomAugment ? [{ ...randomAugment, label: RANDOM_AUGMENT_LABEL, random: true }] : [])];
     return h(
       "div",
       { class: "augments" },
-      augments.map(({ level, reroll, pick }) => {
+      rows.map(({ label, random, reroll, pick }) => {
         const cards = [1, 2, 3].map((position) => {
           const rerolled = reroll.includes(position);
           const classes = ["augment-card", rerolled && "reroll", position === pick && "pick"].filter(Boolean).join(" ");
           const title = [rerolled && "À reroll", position === pick && "À prendre"].filter(Boolean).join(", ");
           return h("span", { class: classes, title }, rerolled ? `${position} ↻` : String(position));
         });
-        return h("div", { class: "augment-row" }, h("span", { class: "augment-level" }, `Niv. ${level}`), h("div", { class: "row" }, cards));
+        return h("div", { class: random ? "augment-row random-row" : "augment-row" }, h("span", { class: "augment-level" }, label), h("div", { class: "row" }, cards));
       }),
       // Builds rolled before this option have no statPick.
       statPick &&

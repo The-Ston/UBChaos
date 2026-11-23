@@ -8,6 +8,8 @@ const LOCALE = "fr_FR";
 const LEGENDARY_MIN_GOLD = 2000;
 // ARAM: Mayhem offers 3 augments at each of these levels; each card can be rerolled once.
 export const AUGMENT_LEVELS = [1, 7, 11, 15];
+// Label of the extra choice of a random augment, shown after the level rows.
+export const RANDOM_AUGMENT_LABEL = "Autre";
 // "Bonus de stats": 750 gold, opens a choice of 3 permanent stat bonuses (and a hat).
 export const STAT_BONUS_ITEM = "6032";
 export const STAT_SIDES = { 1: "à gauche", 2: "au centre", 3: "à droite" };
@@ -229,6 +231,8 @@ export function rollBuild(data, mode, chosenRole = null, champion = null) {
     champion,
     skillOrder: rollSkillOrder(champion),
     augments: MODES[mode]?.augments ? rollAugments() : null,
+    // The extra random augment choice: same reroll/pick instructions as a level.
+    randomAugment: MODES[mode]?.augments ? rollAugmentChoice() : null,
     // Stats bought with surplus gold (750 gold, 3 cards): always take the card at this position.
     statPick: MODES[mode]?.augments ? pick([1, 2, 3]) : null,
   };
@@ -258,12 +262,12 @@ function rollSkillOrder(champion) {
 // Augments are not in Data Dragon, so the roll only says which card positions
 // to reroll and which one to take afterwards.
 function rollAugments() {
+  return AUGMENT_LEVELS.map((level) => ({ level, ...rollAugmentChoice() }));
+}
+
+function rollAugmentChoice() {
   const positions = Array.from({ length: AUGMENT_CHOICES }, (_, i) => i + 1);
-  return AUGMENT_LEVELS.map((level) => ({
-    level,
-    reroll: positions.filter(() => Math.random() < 0.5),
-    pick: pick(positions),
-  }));
+  return { reroll: positions.filter(() => Math.random() < 0.5), pick: pick(positions) };
 }
 
 function rollRunes(data) {

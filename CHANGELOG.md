@@ -4,6 +4,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versio
 
 ## [Unreleased]
 
+### Added
+- ARAM du Chaos: reroll/pick instructions for the random augment choice, between level 15 and the "Bonus de stats" row.
+
 ## [1.5.1] - 2026-11-18
 
 ### Fixed
